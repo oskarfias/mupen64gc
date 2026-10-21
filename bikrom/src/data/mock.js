@@ -11,7 +11,6 @@ export const mockConfig = {
 export const mockText = {
   '[CIUDAD]': mockConfig.city,
   '[CORREO]': mockConfig.email,
-  '[WHATSAPP]': 'Próximamente',
   '[DOMINIO]': 'bikrom.com',
   '[RAZÓN SOCIAL]': 'Bikrom',
   '[RFC DE BIKROM]': 'por definir',
@@ -36,9 +35,6 @@ export const mockText = {
   '[PLATAFORMA DE LA COMUNIDAD]': 'una plataforma privada',
   '[PLATAFORMA DE CURSOS]': 'nuestra plataforma de cursos',
 
-  '[TU NOMBRE]': 'Equipo Bikrom',
-  '[TU EXPERIENCIA]':
-    'Acompañamos a dueños y directores de pymes mexicanas a ordenar finanzas, personas, procesos y tecnología, con entregables claros y precio fijo.',
   '[FECHA DE PUBLICACIÓN]': 'Próximamente',
   '[DETALLE DE OBLIGACIONES — VALIDAR CON LA NORMA OFICIAL]': 'te explicamos el detalle para tu caso en una llamada.',
   '[VERIFICA LAS FUENTES OFICIALES Y AGREGA LOS ENLACES ANTES DE PUBLICAR]': '',

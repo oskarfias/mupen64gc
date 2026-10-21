@@ -52,7 +52,7 @@ export function post(p) {
       <p class="eyebrow"><a class="link" href="/recursos/">Recursos</a> · ${esc(areaByKey[p.area].name)}</p>
       <h1 class="display-2">${esc(p.title)}</h1>
       <p class="lead">${esc(p.description)}</p>
-      <p class="muted small">Por [TU NOMBRE] · ${esc(p.date)}</p>
+      <p class="muted small">Por el equipo de Bikrom · ${esc(p.date)}</p>
     </div>
   </header>
   <div class="container narrow prose">${p.body}</div>
@@ -68,7 +68,7 @@ export function post(p) {
     '@type': 'Article',
     headline: p.title,
     description: p.description,
-    author: { '@type': 'Person', name: '[TU NOMBRE]' },
+    author: { '@type': 'Organization', name: 'Bikrom' },
     publisher: { '@type': 'Organization', name: 'Bikrom' },
     inLanguage: 'es-MX',
   };
@@ -95,12 +95,11 @@ export function nosotros() {
 </section>
 <section class="section">
   <div class="container grid grid--2 about">
-    ${photo('retrato del fundador o fundadora', { ratio: '4 / 5' })}
+    ${photo('equipo de consultores trabajando en planta o en oficina', { ratio: '4 / 5' })}
     <div class="reveal">
-      <h2 class="h2">[TU NOMBRE]</h2>
-      <p class="card-type">Fundador(a) de Bikrom</p>
-      <p>[TU EXPERIENCIA]</p>
-      <p class="muted small">Escribe aquí tu trayectoria real. No agregues certificaciones, cifras ni número de clientes que no puedas comprobar.</p>
+      <h2 class="h2">Un equipo de consultores</h2>
+      <p class="lead">Sumamos más de 10 años de experiencia en roles de manufactura y liderazgo de organizaciones industriales.</p>
+      <p>Cada proyecto lo atiende el consultor con la experiencia que tu reto necesita: finanzas, personas, procesos o tecnología. Trabajamos con entregables claros, responsables con nombre y precio fijo.</p>
       <a class="btn btn--primary" href="/contacto/#agenda">Agenda una llamada</a>
     </div>
   </div>
@@ -118,7 +117,7 @@ export function nosotros() {
   return layout({
     path: '/nosotros/',
     title: 'Nosotros',
-    description: 'Bikrom es una consultoría para pymes en México: números claros, roles claros y procesos claros, con entregables y precio fijo.',
+    description: 'Bikrom es un equipo de consultores con más de 10 años de experiencia sumada en manufactura y liderazgo de organizaciones industriales. Números, roles y procesos claros.',
     body,
   });
 }

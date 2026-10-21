@@ -15,8 +15,8 @@ export const config = {
 
   contact: {
     email: '[CORREO]',
-    whatsapp: '[WHATSAPP]',            // Número visible, por ejemplo +52 ...
-    whatsappNumber: '[NÚMERO]',        // Solo dígitos con lada de país, para wa.me
+    whatsapp: '+52 442 322 6174',      // Número visible
+    whatsappNumber: '524423226174',     // Solo dígitos con lada de país, para wa.me
     whatsappMessage: 'Hola, vengo del sitio de Bikrom y quiero información.',
     city: '[CIUDAD]',
     social: [
