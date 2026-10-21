@@ -83,7 +83,7 @@
   // ───────── Carrito ─────────
   var catalogPromise = null;
   function catalog() {
-    if (!catalogPromise) catalogPromise = fetch('/assets/catalog.json').then(function (r) { return r.json(); });
+    if (!catalogPromise) catalogPromise = fetch('/assets/catalog.json?v=' + (CFG.v || '')).then(function (r) { return r.json(); });
     return catalogPromise;
   }
   function getCart() { return store('bk_cart') || []; }

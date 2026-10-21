@@ -4,6 +4,10 @@ import { esc, abs, safeHref, waLink, jsonLd, highlightMarkers, contactValue, has
 import { logo } from './logo.js';
 import { icon } from './icons.js';
 
+// Versión de los archivos CSS/JS: cambia en cada despliegue para que nadie vea estilos viejos en caché.
+const V = (process.env.RENDER_GIT_COMMIT || Date.now().toString(36)).slice(0, 8);
+const asset = (src) => `${src}?v=${V}`;
+
 const nav = [
   { href: '/soluciones/', label: t.nav.soluciones },
   { href: '/diagnostico-empresa-360/', label: t.nav.diagnostico },
@@ -155,6 +159,7 @@ export function layout({
     bookingUrl: isSet(config.bookingUrl) ? config.bookingUrl : '',
     ivaRate: config.ivaRate,
     preview: config.preview,
+    v: V,
   };
   const html = `<!doctype html>
 <html lang="${config.locales.es.htmlLang}">
@@ -182,10 +187,10 @@ ${config.locales.en.enabled ? `<link rel="alternate" hreflang="en" href="${abs('
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap">
-<link rel="stylesheet" href="/assets/css/styles.css">
+<link rel="stylesheet" href="${asset('/assets/css/styles.css')}">
 <script>window.BIKROM=${JSON.stringify(clientConfig)};</script>
-<script src="/assets/js/main.js" defer></script>
-${scripts.map((s) => `<script src="${s}" defer></script>`).join('\n')}
+<script src="${asset('/assets/js/main.js')}" defer></script>
+${scripts.map((s) => `<script src="${asset(s)}" defer></script>`).join('\n')}
 ${jsonLd(organizationLd())}
 ${jsonld.map(jsonLd).join('\n')}
 </head>
