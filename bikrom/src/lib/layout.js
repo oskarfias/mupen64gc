@@ -27,8 +27,8 @@ export const organizationLd = () => ({
   description: 'Consultoría para pymes en México: finanzas, recursos humanos, liderazgo, cultura, operación y automatización con entregables claros y precio fijo.',
   ...(isSet(contactValue('email')) ? { email: contactValue('email') } : {}),
   ...(isSet(config.contact.whatsapp) ? { telephone: config.contact.whatsapp } : {}),
-  areaServed: 'MX',
-  address: { '@type': 'PostalAddress', ...(isSet(contactValue('city')) ? { addressLocality: contactValue('city') } : {}), addressCountry: 'MX' },
+  areaServed: ['MX', 'Americas'],
+  address: { '@type': 'PostalAddress', addressLocality: config.contact.locality, addressRegion: 'Querétaro', addressCountry: 'MX' },
   sameAs: config.contact.social.map((s) => s.url).filter(isSet),
 });
 
@@ -81,7 +81,7 @@ function footer() {
     <div class="footer-brand">
       ${logo({ inverse: true })}
       <p class="footer-tag">${esc(config.tagline)}</p>
-      <p class="footer-small">Consultoría para pymes mexicanas. Presencial en ${esc(c.city)} y en línea en todo México.</p>
+      <p class="footer-small">Consultoría para pymes. Presencial en ${esc(c.city)}; en línea en ${esc(c.coverage)}.</p>
     </div>
     <div>
       <h2 class="footer-title">${t.footer.contacto}</h2>

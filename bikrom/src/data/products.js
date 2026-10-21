@@ -21,8 +21,8 @@ const LEGAL_NOM035 =
   'La NOM-035 aplica a todos los centros de trabajo, con obligaciones según tamaño: hasta 15, de 16 a 50 y más de 50 trabajadores. Multas de 250 a 5,000 UMA.';
 
 const DUR = '[DEFINE LA DURACIÓN]';
-const FORMAT_SERVICE = 'Proyecto a la medida, presencial en [CIUDAD] o en línea en todo México.';
-const FORMAT_MONTHLY = 'Servicio mensual, presencial en [CIUDAD] o en línea en todo México.';
+const FORMAT_SERVICE = 'Proyecto a la medida, presencial en Querétaro y el Bajío o en línea en todo el continente americano.';
+const FORMAT_MONTHLY = 'Servicio mensual, presencial en Querétaro y el Bajío o en línea en todo el continente americano.';
 const FORMAT_DOWNLOAD = 'Archivo descargable que recibes por correo al confirmarse tu pago.';
 
 export const products = [
@@ -335,7 +335,7 @@ export const products = [
       'Evaluación antes y después',
       'Reporte por participante',
     ],
-    format: 'Taller para tu empresa (grupo de hasta 15) o grupo abierto; presencial en [CIUDAD] o en línea.',
+    format: 'Taller para tu empresa (grupo de hasta 15) o grupo abierto; presencial en Querétaro y el Bajío o en línea.',
     duration: '8 a 12 sesiones · [DEFINE LA DURACIÓN DE CADA SESIÓN]',
     pricing: {
       options: [
@@ -407,7 +407,7 @@ export const products = [
       '6 a 10 sesiones',
       'Objetivos medibles y seguimiento',
     ],
-    format: 'Sesiones uno a uno, presenciales en [CIUDAD] o en línea.',
+    format: 'Sesiones uno a uno, presenciales en Querétaro y el Bajío o en línea.',
     duration: '6 a 10 sesiones · [DEFINE LA DURACIÓN DE CADA SESIÓN]',
     pricing: { options: [{ kind: 'range', label: 'Proceso', min: 15000, max: 45000 }] },
     ctas: ['call', 'proposal'],
@@ -428,7 +428,7 @@ export const products = [
       'OKRs por área',
       'Seguimiento trimestral durante un año',
     ],
-    format: 'Taller presencial en [CIUDAD] o en línea, más seguimiento trimestral.',
+    format: 'Taller presencial en Querétaro y el Bajío o en línea, más seguimiento trimestral.',
     duration: 'Taller de dos días y seguimiento durante un año',
     pricing: { options: [{ kind: 'range', label: 'Proyecto', min: 30000, max: 90000 }] },
     ctas: ['call', 'proposal'],
@@ -760,7 +760,7 @@ export const products = [
       'Política de uso de IA',
       'Seguimiento a 30 días',
     ],
-    format: 'Taller para tu equipo (presencial en [CIUDAD] o en línea) o curso en línea individual.',
+    format: 'Taller para tu equipo (presencial en Querétaro y el Bajío o en línea) o curso en línea individual.',
     duration: DUR,
     pricing: {
       options: [

@@ -139,7 +139,7 @@ export function contacto() {
       <ul class="contact-list">
         <li>${icon('mail')}<div><p class="option-label">Correo</p><a class="link" href="mailto:${esc(contactValue('email'))}">${esc(contactValue('email'))}</a></div></li>
         <li>${icon('whatsapp')}<div><p class="option-label">WhatsApp</p>${config.preview && !hasWhatsapp() ? `<p>${esc(c.whatsapp)}</p>` : `<a class="link" href="${waLink()}" target="_blank" rel="noopener">${esc(c.whatsapp)}</a>`}</div></li>
-        <li>${icon('pin')}<div><p class="option-label">Ciudad</p><p>Presencial en ${esc(c.city)} y en línea en todo México.</p></div></li>
+        <li>${icon('pin')}<div><p class="option-label">Cobertura</p><p>Presencial en ${esc(c.city)}; en línea en ${config.contact.coverage}.</p></div></li>
         <li>${icon('user')}<div><p class="option-label">Redes sociales</p>${config.preview && !c.social.some((s) => isSet(s.url)) ? '<p>[REDES SOCIALES]</p>' : `<p>${c.social.filter((s) => !config.preview || isSet(s.url)).map((s) => `<a class="link" href="${safeHref(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a>`).join(' · ')}</p><p class="small muted">[REDES SOCIALES]</p>`}</div></li>
         <li>${icon('format')}<div><p class="option-label">Sitio</p><p>${esc(config.domain)}</p></div></li>
       </ul>
@@ -157,7 +157,7 @@ export function contacto() {
   return layout({
     path: '/contacto/',
     title: 'Contacto y agenda',
-    description: `Agenda una llamada de 30 minutos con Bikrom, consultoría para pymes. Presencial en ${c.city} y en línea en todo México.`,
+    description: `Agenda una llamada de 30 minutos con Bikrom, consultoría para pymes. Presencial en ${c.city}; en línea en ${config.contact.coverage}.`,
     body,
   });
 }

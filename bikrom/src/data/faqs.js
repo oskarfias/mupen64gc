@@ -16,7 +16,7 @@ export const homeFaqs = [
   },
   {
     q: '¿Trabajan en línea o presencial?',
-    a: `Presencial en ${config.contact.city} y en línea en todo México.`,
+    a: `Presencial en ${config.contact.city}; en línea en ${config.contact.coverage}.`,
   },
   {
     q: '¿Cuánto tarda un proyecto?',
@@ -65,7 +65,7 @@ export function productFaqs(p) {
   });
   out.push({
     q: '¿Trabajan en línea o presencial?',
-    a: `Presencial en ${config.contact.city} y en línea en todo México.`,
+    a: `Presencial en ${config.contact.city}; en línea en ${config.contact.coverage}.`,
   });
   return out;
 }

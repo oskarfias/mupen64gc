@@ -18,7 +18,9 @@ export const config = {
     whatsapp: '+52 442 322 6174',      // Número visible
     whatsappNumber: '524423226174',     // Solo dígitos con lada de país, para wa.me
     whatsappMessage: 'Hola, vengo del sitio de Bikrom y quiero información.',
-    city: '[CIUDAD]',
+    city: 'Querétaro y la zona industrial del Bajío', // Atención presencial
+    coverage: 'todo el continente americano',         // Atención en línea
+    locality: 'Querétaro',                            // Para datos estructurados
     social: [
       { name: 'LinkedIn', url: '[REDES SOCIALES: URL DE LINKEDIN]' },
       { name: 'Instagram', url: '[REDES SOCIALES: URL DE INSTAGRAM]' },

@@ -5,11 +5,9 @@
 
 export const mockConfig = {
   email: 'hola@bikrom.com',
-  city: 'Ciudad de México',
 };
 
 export const mockText = {
-  '[CIUDAD]': mockConfig.city,
   '[CORREO]': mockConfig.email,
   '[DOMINIO]': 'bikrom.com',
   '[RAZÓN SOCIAL]': 'Bikrom',
