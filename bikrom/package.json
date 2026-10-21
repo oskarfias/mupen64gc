@@ -1,0 +1,14 @@
+{
+  "name": "bikrom-sitio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sitio web de Bikrom — Tu empresa, en blanco y negro.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node server.mjs",
+    "dev": "node build.mjs && node server.mjs",
+    "check": "node build.mjs && node scripts/check.mjs"
+  }
+}

@@ -1,0 +1,5 @@
+dist/
+data/*.json
+.env
+private/descargas/*
+!private/descargas/LEEME.md
