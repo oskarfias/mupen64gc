@@ -5,6 +5,9 @@
 export const isSet = (v) => typeof v === 'string' && v.trim() !== '' && !v.trim().startsWith('[');
 
 export const config = {
+  // Vista previa: banner visible, sin indexar en buscadores, sin cobros y con textos de ejemplo
+  // en lugar de los marcadores. Para lanzar: PREVIEW=false en el hosting.
+  preview: process.env.PREVIEW !== 'false',
   brand: 'Bikrom',
   tagline: 'Tu empresa, en blanco y negro.',
   siteUrl: (process.env.SITE_URL || 'https://bikrom.com').replace(/\/$/, ''),

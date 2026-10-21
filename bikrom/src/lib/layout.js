@@ -1,6 +1,6 @@
 import { config, isSet } from '../config.js';
 import t from '../i18n/es.js';
-import { esc, abs, safeHref, waLink, jsonLd, highlightMarkers } from './html.js';
+import { esc, abs, safeHref, waLink, jsonLd, highlightMarkers, contactValue, hasWhatsapp } from './html.js';
 import { logo } from './logo.js';
 import { icon } from './icons.js';
 
@@ -21,10 +21,10 @@ export const organizationLd = () => ({
   logo: abs('/img/logo.svg'),
   slogan: 'Tu empresa, en blanco y negro.',
   description: 'Consultoría para pymes en México: finanzas, recursos humanos, liderazgo, cultura, operación y automatización con entregables claros y precio fijo.',
-  email: config.contact.email,
-  telephone: config.contact.whatsapp,
+  ...(isSet(contactValue('email')) ? { email: contactValue('email') } : {}),
+  ...(isSet(config.contact.whatsapp) ? { telephone: config.contact.whatsapp } : {}),
   areaServed: 'MX',
-  address: { '@type': 'PostalAddress', addressLocality: config.contact.city, addressCountry: 'MX' },
+  address: { '@type': 'PostalAddress', ...(isSet(contactValue('city')) ? { addressLocality: contactValue('city') } : {}), addressCountry: 'MX' },
   sameAs: config.contact.social.map((s) => s.url).filter(isSet),
 });
 
@@ -69,6 +69,7 @@ export function finalCta() {
 function footer() {
   const c = config.contact;
   const social = c.social
+    .filter((s) => !config.preview || isSet(s.url))
     .map((s) => `<li><a class="link-light" href="${safeHref(s.url)}" rel="noopener" target="_blank">${esc(s.name)}</a> <span class="footer-small">${esc(s.url)}</span></li>`)
     .join('');
   return `<footer class="site-footer section--dark">
@@ -81,12 +82,12 @@ function footer() {
     <div>
       <h2 class="footer-title">${t.footer.contacto}</h2>
       <ul class="footer-list">
-        <li>${icon('mail', { color: '#FFFFFF', size: 18 })} <a class="link-light" href="mailto:${esc(c.email)}">${esc(c.email)}</a></li>
-        <li>${icon('whatsapp', { color: '#FFFFFF', size: 18 })} <a class="link-light" href="${waLink()}" rel="noopener" target="_blank">${esc(c.whatsapp)}</a></li>
+        <li>${icon('mail', { color: '#FFFFFF', size: 18 })} <a class="link-light" href="mailto:${esc(contactValue('email'))}">${esc(contactValue('email'))}</a></li>
+        <li>${icon('whatsapp', { color: '#FFFFFF', size: 18 })} <a class="link-light" href="${waLink()}"${hasWhatsapp() || !config.preview ? ' rel="noopener" target="_blank"' : ''}>${esc(c.whatsapp)}</a></li>
         <li>${icon('pin', { color: '#FFFFFF', size: 18 })} ${esc(c.city)}</li>
       </ul>
-      <h2 class="footer-title">${t.footer.redes}</h2>
-      <ul class="footer-list">${social}</ul>
+      ${social ? `<h2 class="footer-title">${t.footer.redes}</h2>
+      <ul class="footer-list">${social}</ul>` : ''}
     </div>
     <div>
       <h2 class="footer-title">Sitio</h2>
@@ -113,7 +114,7 @@ function footer() {
     </div>
   </div>
   <div class="container footer-bottom">
-    <p>© <span data-year>2026</span> Bikrom · ${esc(config.legal.businessName)} · ${t.footer.derechos}</p>
+    <p>© <span data-year>2026</span> Bikrom${config.preview && !isSet(config.legal.businessName) ? '' : ` · ${esc(config.legal.businessName)}`} · ${t.footer.derechos}</p>
   </div>
 </footer>`;
 }
@@ -153,6 +154,7 @@ export function layout({
     metaPixelId: isSet(config.analytics.metaPixelId) ? config.analytics.metaPixelId : '',
     bookingUrl: isSet(config.bookingUrl) ? config.bookingUrl : '',
     ivaRate: config.ivaRate,
+    preview: config.preview,
   };
   const html = `<!doctype html>
 <html lang="${config.locales.es.htmlLang}">
@@ -162,7 +164,7 @@ export function layout({
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="${esc(description)}">
 <meta name="keywords" content="Bikrom, consultoría para pymes, NOM-035, jornada de 40 horas, flujo de efectivo, CFO externo, formación de líderes, automatización para empresas">
-${noindex ? '<meta name="robots" content="noindex, follow">' : ''}
+${noindex || config.preview ? '<meta name="robots" content="noindex, follow">' : ''}
 <link rel="canonical" href="${abs(path)}">
 <link rel="alternate" hreflang="es-MX" href="${abs(path)}">
 ${config.locales.en.enabled ? `<link rel="alternate" hreflang="en" href="${abs('/en' + path)}">` : '<!-- hreflang en: se activa con config.locales.en.enabled -->'}
@@ -189,6 +191,7 @@ ${jsonld.map(jsonLd).join('\n')}
 </head>
 <body class="${bodyClass}">
 <a class="skip-link" href="#contenido">${t.skip}</a>
+${config.preview ? '<div class="preview-bar" role="note"><div class="container"><p><strong>Versión preliminar.</strong> Algunos datos son de ejemplo y los pagos en línea aún no están activos.</p></div></div>' : ''}
 ${notice ? noticeBar() : ''}
 ${header(path)}
 <main id="contenido" tabindex="-1">
@@ -196,7 +199,7 @@ ${body}
 </main>
 ${showFinalCta ? finalCta() : ''}
 ${footer()}
-<a class="wa-float" href="${waLink()}" target="_blank" rel="noopener" aria-label="${t.whatsapp} (${esc(config.contact.whatsappNumber)})">${icon('whatsapp', { color: '#FFFFFF', size: 26 })}</a>
+<a class="wa-float" href="${waLink()}"${hasWhatsapp() || !config.preview ? ' target="_blank" rel="noopener"' : ''} aria-label="${hasWhatsapp() || !config.preview ? `${t.whatsapp} (${esc(config.contact.whatsappNumber)})` : t.nav.contacto}">${icon('whatsapp', { color: '#FFFFFF', size: 26 })}</a>
 ${cookieBanner()}
 </body>
 </html>

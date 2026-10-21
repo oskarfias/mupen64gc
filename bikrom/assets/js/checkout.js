@@ -28,6 +28,7 @@
           // Las suscripciones se cobran con tarjeta de forma recurrente.
           form.querySelector('[data-method-oxxo]').hidden = true;
           form.querySelector('[data-method-transfer]').hidden = true;
+          form.querySelector('[data-method-hint]').hidden = true;
           $('[data-pay-button]').textContent = 'Suscribirme';
         }
         if (!items.length) {

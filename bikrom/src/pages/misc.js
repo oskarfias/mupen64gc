@@ -1,9 +1,9 @@
-import { config } from '../config.js';
+import { config, isSet } from '../config.js';
 import { areaByKey } from '../data/areas.js';
 import { products, productBySlug } from '../data/products.js';
 import { posts } from '../data/posts.js';
 import { layout } from '../lib/layout.js';
-import { esc, safeHref, waLink } from '../lib/html.js';
+import { esc, safeHref, waLink, contactValue, hasWhatsapp } from '../lib/html.js';
 import { icon } from '../lib/icons.js';
 import { areaIcon, bookingEmbed, proposalForm, productCard, photo } from '../lib/components.js';
 
@@ -138,10 +138,10 @@ export function contacto() {
   <div class="container grid grid--2 contact-grid">
     <div>
       <ul class="contact-list">
-        <li>${icon('mail')}<div><p class="option-label">Correo</p><a class="link" href="mailto:${esc(c.email)}">${esc(c.email)}</a></div></li>
-        <li>${icon('whatsapp')}<div><p class="option-label">WhatsApp</p><a class="link" href="${waLink()}" target="_blank" rel="noopener">${esc(c.whatsapp)}</a></div></li>
+        <li>${icon('mail')}<div><p class="option-label">Correo</p><a class="link" href="mailto:${esc(contactValue('email'))}">${esc(contactValue('email'))}</a></div></li>
+        <li>${icon('whatsapp')}<div><p class="option-label">WhatsApp</p>${config.preview && !hasWhatsapp() ? `<p>${esc(c.whatsapp)}</p>` : `<a class="link" href="${waLink()}" target="_blank" rel="noopener">${esc(c.whatsapp)}</a>`}</div></li>
         <li>${icon('pin')}<div><p class="option-label">Ciudad</p><p>Presencial en ${esc(c.city)} y en línea en todo México.</p></div></li>
-        <li>${icon('user')}<div><p class="option-label">Redes sociales</p><p>${c.social.map((s) => `<a class="link" href="${safeHref(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a>`).join(' · ')}</p><p class="small muted">[REDES SOCIALES]</p></div></li>
+        <li>${icon('user')}<div><p class="option-label">Redes sociales</p>${config.preview && !c.social.some((s) => isSet(s.url)) ? '<p>[REDES SOCIALES]</p>' : `<p>${c.social.filter((s) => !config.preview || isSet(s.url)).map((s) => `<a class="link" href="${safeHref(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a>`).join(' · ')}</p><p class="small muted">[REDES SOCIALES]</p>`}</div></li>
         <li>${icon('format')}<div><p class="option-label">Sitio</p><p>${esc(config.domain)}</p></div></li>
       </ul>
     </div>
@@ -248,11 +248,12 @@ export function carrito() {
         <label class="radio"><input type="radio" name="metodo" value="tarjeta" checked> <span>Tarjeta de crédito o débito</span></label>
         <label class="radio" data-method-oxxo><input type="radio" name="metodo" value="oxxo"> <span>Efectivo en OXXO</span></label>
         <label class="radio" data-method-transfer><input type="radio" name="metodo" value="transferencia"> <span>Transferencia (SPEI)</span></label>
-        <p class="hint">Con OXXO o transferencia, tus descargables y accesos se envían cuando se acredita el pago.</p>
+        <p class="hint" data-method-hint>Con OXXO o transferencia, tus descargables y accesos se envían cuando se acredita el pago.</p>
       </fieldset>
 
       <label class="check"><input type="checkbox" name="terminos" required> <span>Acepto los <a class="link" href="/terminos-y-condiciones/" target="_blank">términos y condiciones</a>, la <a class="link" href="/politica-de-reembolsos/" target="_blank">política de reembolsos</a> y el <a class="link" href="/aviso-de-privacidad/" target="_blank">aviso de privacidad</a>.</span></label>
-      <button class="btn btn--primary btn--lg btn--block" type="submit" data-pay-button>Ir a pagar</button>
+      ${config.preview ? `<p class="preview-note" role="note"><strong>Los pagos en línea se activan muy pronto.</strong> Mientras tanto, <a class="link" href="/solicita-propuesta/">solicita tu producto</a> y te contactamos para completar tu compra.</p>` : ''}
+      <button class="btn btn--primary btn--lg btn--block" type="submit" data-pay-button${config.preview ? ' disabled' : ''}>Ir a pagar</button>
       <p class="muted small">Pago seguro con Mercado Pago o Stripe. Bikrom no almacena los datos de tu tarjeta.</p>
       <p class="form-status" role="status" aria-live="polite"></p>
     </form>

@@ -109,7 +109,7 @@ mark.ph { background: var(--white); color: var(--black); outline: 1px dashed var
 .btn--sm { min-height: 40px; padding: 8px 14px; font-size: .9rem; }
 .btn--lg { min-height: 56px; padding: 16px 28px; font-size: 1.05rem; }
 .btn--block { width: 100%; }
-.btn[disabled] { opacity: .5; cursor: progress; }
+.btn[disabled], .btn[disabled]:hover { background: var(--white); color: var(--gray); border-color: var(--line); cursor: not-allowed; }
 .btn-row { display: flex; flex-wrap: wrap; gap: 12px; }
 .btn-col { display: grid; gap: 12px; }
 
@@ -435,3 +435,9 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 }
 
 [hidden] { display: none !important; }
+
+/* Vista previa */
+.preview-bar { border-bottom: 1px solid var(--black); background: var(--white); font-size: .85rem; }
+.preview-bar p { margin: 0; padding: 8px 0; }
+.preview-note { border: 1px solid var(--black); border-radius: var(--radius); padding: 14px 16px; margin: 0; }
+.photo--symbol { display: flex; align-items: center; justify-content: center; }

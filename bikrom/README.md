@@ -11,6 +11,19 @@ npm start                 # sitio y API en http://localhost:3000
 npm run check             # revisa SEO y precios "+ IVA", y lista los marcadores pendientes
 ```
 
+## Vista previa y lanzamiento
+
+Mientras `PREVIEW` no sea `false`, el sitio funciona en **vista previa**:
+
+- Muestra un aviso arriba: "Versión preliminar".
+- Los buscadores no lo indexan (`noindex` y `robots.txt` cerrado).
+- Los pagos están desactivados.
+- Los marcadores se sustituyen por textos neutrales de `src/data/mock.js`.
+
+Cada dato real que llenes en `src/config.js` o en el contenido reemplaza automáticamente al de ejemplo. Para lanzar, pon `PREVIEW=false` en el hosting.
+
+Despliegue en Render: `render.yaml` (en la raíz del repositorio) define el servicio, un disco persistente (`DATA_DIR`) y los dominios `bikrom.com` y `www.bikrom.com`. Las visitas a `www` se redirigen a `bikrom.com`.
+
 ## Estructura
 
 | Ruta | Qué contiene |

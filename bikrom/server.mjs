@@ -21,7 +21,7 @@ const env = process.env;
 const PORT = Number(env.PORT || 3000);
 const SITE = config.siteUrl;
 const dist = join(root, 'dist');
-const store = createStore(join(root, 'data'));
+const store = createStore(env.DATA_DIR || join(root, 'data'));
 const sendMail = createMailer({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM || 'Bikrom <onboarding@resend.dev>', store });
 const NOTIFY = isSet(env.EMAIL_NOTIFY || '') ? env.EMAIL_NOTIFY : null;
 const IVA = config.ivaRate;
@@ -211,6 +211,7 @@ function providerFor() {
 }
 
 async function apiCheckout(req, res) {
+  if (config.preview) return json(res, 403, { error: 'Los pagos en línea se activan muy pronto. Solicita tu producto desde el formulario de propuesta.' });
   const b = await readJson(req);
   if (!b) return json(res, 400, { error: 'Solicitud inválida.' });
   const cliente = { nombre: str(b.cliente?.nombre), correo: str(b.cliente?.correo), whatsapp: str(b.cliente?.whatsapp, 30), empresa: str(b.cliente?.empresa) };
@@ -382,6 +383,11 @@ async function admin(req, res, url) {
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
+  // www.bikrom.com → bikrom.com (un solo dominio canónico)
+  if ((req.headers.host || '').startsWith('www.')) {
+    res.writeHead(301, { Location: SITE + req.url });
+    return res.end();
+  }
   try {
     if (req.method === 'POST' && p.startsWith('/api/') && !p.startsWith('/api/webhooks/') && rateLimited(req)) return json(res, 429, { error: 'Demasiadas solicitudes. Intenta en un minuto.' });
     if (req.method === 'POST' && p === '/api/diagnostico') return await apiDiagnostico(req, res);
@@ -406,5 +412,5 @@ const server = createServer(async (req, res) => {
 
 if (!existsSync(dist)) console.warn('Aviso: no existe dist/. Ejecuta `npm run build` primero.');
 server.listen(PORT, () => {
-  console.log(`Bikrom en http://localhost:${PORT} · pagos: ${providerFor()} · correo: ${env.RESEND_API_KEY ? 'Resend' : 'sin enviar (se guarda en el panel)'} · ${products.length} productos`);
+  console.log(`Bikrom en http://localhost:${PORT}${config.preview ? ' · VISTA PREVIA' : ''} · pagos: ${providerFor()} · correo: ${env.RESEND_API_KEY ? 'Resend' : 'sin enviar (se guarda en el panel)'} · ${products.length} productos`);
 });

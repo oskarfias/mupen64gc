@@ -1,9 +1,10 @@
-import { config } from '../config.js';
+import { config, isSet } from '../config.js';
 import t from '../i18n/es.js';
 import { areaByKey, types } from '../data/areas.js';
 import { productUrl, buyOptions } from '../data/products.js';
 import { esc } from './html.js';
 import { icon } from './icons.js';
+import { symbol } from './logo.js';
 import { cardPrice } from './format.js';
 import { employeeRanges } from '../data/diagnostico.js';
 
@@ -82,12 +83,15 @@ export function bookingEmbed({ title = 'Agenda una llamada de 30 minutos', conte
   return `<div class="booking" data-booking data-context="${esc(context)}">
   <div class="booking-head">${icon('calendar', { size: 24 })}<h3 class="h4">${esc(title)}</h3></div>
   <div class="booking-frame" data-booking-frame>
-    <p class="booking-fallback">${esc(config.bookingUrl)} — pega en <code>src/config.js</code> la URL de tu evento de Calendly o Cal.com y aquí aparecerá tu calendario.</p>
+    ${config.preview && !isSet(config.bookingUrl)
+      ? '<p class="booking-fallback">La agenda en línea estará disponible muy pronto. Mientras tanto, <a class="link" href="/solicita-propuesta/">déjanos tus datos</a> y te contactamos para agendar.</p>'
+      : `<p class="booking-fallback">${esc(config.bookingUrl)} — pega en <code>src/config.js</code> la URL de tu evento de Calendly o Cal.com y aquí aparecerá tu calendario.</p>`}
   </div>
 </div>`;
 }
 
 export function photo(desc, { cls = '', ratio = '4 / 3' } = {}) {
+  if (config.preview) return `<figure class="photo photo--symbol ${cls}" style="aspect-ratio:${ratio}" aria-hidden="true">${symbol({ size: 200 })}</figure>`;
   return `<figure class="photo ${cls}" style="aspect-ratio:${ratio}">
   <!-- Reemplazar por: <img src="/img/archivo.jpg" alt="${esc(desc)}" loading="lazy" width="1200" height="900"> (foto libre en blanco y negro, alto contraste) -->
   <div class="photo-ph" role="img" aria-label="${esc(desc)}"><span>[FOTO EN BLANCO Y NEGRO: ${esc(desc)}]</span></div>

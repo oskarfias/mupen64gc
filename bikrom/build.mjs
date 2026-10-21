@@ -74,6 +74,6 @@ writeFileSync(join(dist, 'assets', 'catalog.json'), JSON.stringify(catalogJson))
 const today = new Date().toISOString().slice(0, 10);
 const urls = pages.filter((p) => p.sitemap).map((p) => `  <url><loc>${config.siteUrl}${p.path}</loc><lastmod>${today}</lastmod></url>`);
 writeFileSync(join(dist, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`);
-writeFileSync(join(dist, 'robots.txt'), `User-agent: *\nDisallow: /carrito/\nDisallow: /gracias/\nDisallow: /admin\nDisallow: /api/\nSitemap: ${config.siteUrl}/sitemap.xml\n`);
+writeFileSync(join(dist, 'robots.txt'), config.preview ? 'User-agent: *\nDisallow: /\n' : `User-agent: *\nDisallow: /carrito/\nDisallow: /gracias/\nDisallow: /admin\nDisallow: /api/\nSitemap: ${config.siteUrl}/sitemap.xml\n`);
 
-console.log(`Bikrom: ${pages.length + 1} páginas generadas en dist/ (${products.length} productos en catálogo).`);
+console.log(`Bikrom: ${pages.length + 1} páginas generadas en dist/ (${products.length} productos en catálogo)${config.preview ? ' · VISTA PREVIA' : ''}.`);

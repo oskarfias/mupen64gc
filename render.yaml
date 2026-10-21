@@ -1,0 +1,43 @@
+# Despliegue de bikrom.com en Render (Blueprint). El sitio vive en la carpeta bikrom/.
+services:
+  - type: web
+    name: bikrom
+    runtime: node
+    rootDir: bikrom
+    plan: starter            # el disco persistente requiere un plan de pago
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
+    disk:
+      name: bikrom-data
+      mountPath: /var/data
+      sizeGB: 1
+    domains:
+      - bikrom.com
+      - www.bikrom.com
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: SITE_URL
+        value: https://bikrom.com
+      - key: PREVIEW          # cambia a "false" para lanzar (activa pagos e indexación)
+        value: "true"
+      - key: DATA_DIR
+        value: /var/data
+      - key: ADMIN_USER
+        value: admin
+      - key: ADMIN_PASSWORD
+        generateValue: true   # consúltala en Render → Environment
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: Bikrom <hola@bikrom.com>
+      - key: EMAIL_NOTIFY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: MERCADOPAGO_ACCESS_TOKEN
+        sync: false
