@@ -7,8 +7,8 @@ export const isSet = (v) => typeof v === 'string' && v.trim() !== '' && !v.trim(
 export const config = {
   brand: 'Bikrom',
   tagline: 'Tu empresa, en blanco y negro.',
-  siteUrl: (process.env.SITE_URL || 'https://[DOMINIO]').replace(/\/$/, ''),
-  domain: '[DOMINIO]',
+  siteUrl: (process.env.SITE_URL || 'https://bikrom.com').replace(/\/$/, ''),
+  domain: 'bikrom.com',
 
   contact: {
     email: '[CORREO]',
