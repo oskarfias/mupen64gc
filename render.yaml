@@ -4,15 +4,16 @@ services:
     name: bikrom
     runtime: node
     rootDir: bikrom
-    plan: starter            # el disco persistente requiere un plan de pago
+    plan: free               # para guardar datos de forma permanente: plan starter + disk (ver abajo)
     buildCommand: npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true
-    disk:
-      name: bikrom-data
-      mountPath: /var/data
-      sizeGB: 1
+    # Con plan starter, descomenta el disco y la variable DATA_DIR:
+    # disk:
+    #   name: bikrom-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
     domains:
       - bikrom.com
       - www.bikrom.com
@@ -23,8 +24,8 @@ services:
         value: https://bikrom.com
       - key: PREVIEW          # cambia a "false" para lanzar (activa pagos e indexación)
         value: "true"
-      - key: DATA_DIR
-        value: /var/data
+      # - key: DATA_DIR
+      #   value: /var/data
       - key: ADMIN_USER
         value: admin
       - key: ADMIN_PASSWORD
