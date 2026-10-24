@@ -5,6 +5,7 @@ export default {
   nav: {
     soluciones: 'Soluciones',
     diagnostico: 'Diagnóstico 360',
+    certificaciones: 'Certificaciones',
     membresia: 'Membresía',
     recursos: 'Recursos',
     nosotros: 'Nosotros',

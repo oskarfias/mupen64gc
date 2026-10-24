@@ -2,6 +2,10 @@ import { config, isSet } from '../config.js';
 import { areaByKey } from '../data/areas.js';
 import { products, productBySlug } from '../data/products.js';
 import { posts } from '../data/posts.js';
+import { certificaciones } from '../data/certificaciones.js';
+
+// Solo las certificaciones con inscripción habilitada aparecen en los formularios.
+const certOptions = () => certificaciones.filter((c) => c.available).map((c) => ({ slug: c.slug, name: `Certificación: ${c.title} (${c.norms})` }));
 import { layout } from '../lib/layout.js';
 import { esc, safeHref, waLink, contactValue, hasWhatsapp } from '../lib/html.js';
 import { icon } from '../lib/icons.js';
@@ -124,7 +128,7 @@ export function nosotros() {
 
 // ───────────── Contacto ─────────────
 export function contacto() {
-  const opts = products.map((p) => ({ slug: p.slug, name: p.name }));
+  const opts = [...products.map((p) => ({ slug: p.slug, name: p.name })), ...certOptions()];
   const body = `
 <section class="page-hero">
   <div class="container">
@@ -163,7 +167,7 @@ export function contacto() {
 }
 
 export function solicitaPropuesta() {
-  const opts = products.map((p) => ({ slug: p.slug, name: p.name }));
+  const opts = [...products.map((p) => ({ slug: p.slug, name: p.name })), ...certOptions()];
   const body = `
 <section class="page-hero">
   <div class="container narrow">

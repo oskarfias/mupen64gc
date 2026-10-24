@@ -12,6 +12,7 @@ if (existsSync(join(root, '.env')) && process.loadEnvFile) process.loadEnvFile(j
 const { config, isSet } = await import('./src/config.js');
 const { products, productBySlug, skus } = await import('./src/data/products.js');
 const { scoreDiagnostic, answersComplete } = await import('./src/data/diagnostico.js');
+const { certBySlug } = await import('./src/data/certificaciones.js');
 const { createStore, COLLECTIONS } = await import('./server/store.js');
 const { createMailer, emailLayout, button, esc } = await import('./server/email.js');
 const pay = await import('./server/payments.js');
@@ -181,7 +182,9 @@ async function apiPropuesta(req, res) {
   const b = await readJson(req);
   const data = { nombre: str(b?.nombre), empresa: str(b?.empresa), correo: str(b?.correo), whatsapp: str(b?.whatsapp, 30), empleados: str(b?.empleados, 30), producto: str(b?.producto, 80), mensaje: str(b?.mensaje, 3000), pagina: str(b?.pagina, 200) };
   if (!data.nombre || !data.empresa || !isEmail(data.correo) || !data.empleados || !data.producto || !data.mensaje || b.privacidad !== true) return json(res, 400, { error: 'Faltan datos del formulario.' });
-  data.productoNombre = productBySlug[data.producto]?.name || data.producto;
+  const cert = certBySlug[data.producto];
+  if (cert && !cert.available) return json(res, 400, { error: 'La inscripción a esta certificación estará disponible próximamente.' });
+  data.productoNombre = productBySlug[data.producto]?.name || (cert ? `Certificación: ${cert.title} (${cert.norms})` : data.producto);
   store.insert('solicitudes', data);
   notify(`Solicitud de propuesta: ${data.productoNombre}`, data);
   json(res, 200, { ok: true });

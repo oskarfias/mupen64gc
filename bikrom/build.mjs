@@ -13,6 +13,7 @@ import catalog from './src/pages/catalog.js';
 import product from './src/pages/product.js';
 import diagnostico from './src/pages/diagnostico.js';
 import membresia from './src/pages/membresia.js';
+import certificaciones from './src/pages/certificaciones.js';
 import * as misc from './src/pages/misc.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -29,6 +30,7 @@ add('/soluciones/', catalog());
 for (const p of products) if (!p.href) add(productUrl(p), product(p));
 add('/diagnostico-empresa-360/', diagnostico());
 add('/membresia/', membresia());
+add('/certificaciones/', certificaciones());
 add('/recursos/', misc.recursos());
 for (const p of posts) add(`/recursos/${p.slug}/`, misc.post(p), !p.draft);
 add('/nosotros/', misc.nosotros());

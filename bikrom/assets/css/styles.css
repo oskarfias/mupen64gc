@@ -441,3 +441,16 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .preview-bar p { margin: 0; padding: 8px 0; }
 .preview-note { border: 1px solid var(--black); border-radius: var(--radius); padding: 14px 16px; margin: 0; }
 .photo--symbol { display: flex; align-items: center; justify-content: center; }
+
+/* Certificaciones */
+.cert-note { margin: 0 0 40px; max-width: 52em; }
+.cert-norms { font-family: var(--font-display); font-weight: 600; margin: 0; }
+.cert-doc { display: flex; gap: 10px; align-items: flex-start; border-top: 1px solid var(--line); padding-top: 14px; }
+.cert-doc p { margin: 0; }
+.cert-doc .icon { margin-top: 2px; }
+.cert-doc-label { font-family: var(--font-display); font-size: .78rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+.cert-soon { margin: 0; font-size: .9rem; color: var(--gray); }
+.cert-card--soon .card-title, .cert-card--soon .cert-norms { color: var(--gray); }
+.card:hover .cert-soon, .card:hover.cert-card--soon .card-title, .card:hover.cert-card--soon .cert-norms { color: var(--white); }
+.card:hover .cert-doc { border-color: var(--white); }
+.cert-foot { margin-top: 32px; }

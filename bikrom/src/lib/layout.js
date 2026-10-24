@@ -11,6 +11,7 @@ const asset = (src) => `${src}?v=${V}`;
 const nav = [
   { href: '/soluciones/', label: t.nav.soluciones },
   { href: '/diagnostico-empresa-360/', label: t.nav.diagnostico },
+  { href: '/certificaciones/', label: t.nav.certificaciones },
   { href: '/membresia/', label: t.nav.membresia },
   { href: '/recursos/', label: t.nav.recursos },
   { href: '/nosotros/', label: t.nav.nosotros },
