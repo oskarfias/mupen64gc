@@ -17,6 +17,9 @@ const { createStore, COLLECTIONS } = await import('./server/store.js');
 const { createMailer, emailLayout, button, esc } = await import('./server/email.js');
 const pay = await import('./server/payments.js');
 const { renderAdmin, toCsv } = await import('./server/admin.js');
+// Sección Bikrom Photography (Estefanía Torres Fotografía): app propia montada en /photography
+const { createPhotography } = await import('./photography/index.mjs');
+const photography = createPhotography({ env: process.env });
 
 const env = process.env;
 const PORT = Number(env.PORT || 3000);
@@ -391,6 +394,7 @@ const server = createServer(async (req, res) => {
     res.writeHead(301, { Location: SITE + req.url });
     return res.end();
   }
+  if (p === '/photography' || p.startsWith('/photography/')) return photography.handle(req, res);
   try {
     if (req.method === 'POST' && p.startsWith('/api/') && !p.startsWith('/api/webhooks/') && rateLimited(req)) return json(res, 429, { error: 'Demasiadas solicitudes. Intenta en un minuto.' });
     if (req.method === 'POST' && p === '/api/diagnostico') return await apiDiagnostico(req, res);

@@ -42,3 +42,26 @@ services:
         sync: false
       - key: MERCADOPAGO_ACCESS_TOKEN
         sync: false
+      # ── Bikrom Photography (/photography) ──
+      - key: NODE_ENV
+        value: production
+      - key: APP_SECRET
+        generateValue: true
+      - key: PHOTO_ADMIN_PASSWORD
+        generateValue: true   # contraseña del panel de fotografía: consúltala en Render → Environment
+      - key: STORAGE_DRIVER
+        value: local          # cambia a "s3" al conectar Cloudflare R2 / Backblaze B2 (ver photography/README.md)
+      - key: PHOTO_EMAIL_FROM
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: CRON_SECRET
+        generateValue: true

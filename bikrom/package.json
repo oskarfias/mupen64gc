@@ -4,11 +4,15 @@
   "private": true,
   "description": "Sitio web de Bikrom — Tu empresa, en blanco y negro.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "build": "node build.mjs",
-    "start": "node server.mjs",
-    "dev": "node build.mjs && node server.mjs",
-    "check": "node build.mjs && node scripts/check.mjs"
+    "start": "node --disable-warning=ExperimentalWarning server.mjs",
+    "dev": "node build.mjs && node --disable-warning=ExperimentalWarning server.mjs",
+    "check": "node build.mjs && node scripts/check.mjs",
+    "photo": "node --disable-warning=ExperimentalWarning photography/server.mjs",
+    "photo:test": "node --disable-warning=ExperimentalWarning photography/tests/run.mjs"
   }
 }

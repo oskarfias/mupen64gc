@@ -3,3 +3,5 @@ data/*.json
 .env
 private/descargas/*
 !private/descargas/LEEME.md
+data/photography/
+photography/.env

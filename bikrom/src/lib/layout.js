@@ -98,6 +98,7 @@ function footer() {
       <h2 class="footer-title">Sitio</h2>
       <ul class="footer-list">
         ${nav.map((n) => `<li><a class="link-light" href="${n.href}">${n.label}</a></li>`).join('')}
+        <li><a class="link-light" href="/photography/">Bikrom Photography</a></li>
       </ul>
       <h2 class="footer-title">${t.footer.legales}</h2>
       <ul class="footer-list">
