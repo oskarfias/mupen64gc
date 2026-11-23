@@ -1,0 +1,21 @@
+ID,Prioridad,Entregable,Puntos,Etapa
+B01,P0,"Arquitectura, repositorio y CI/CD",8,Fundación
+B02,P0,"Autenticación y aislamiento multiusuario",13,Fundación
+B03,P0,"Esquema de base de datos y migraciones",8,Fundación
+B04,P0,"Motor de hábitos, metas y programaciones",13,Núcleo
+B05,P0,"Registro diario y estados",13,Núcleo
+B06,P0,"Pruebas de seguridad y cálculos",13,Calidad
+B07,P1,"Onboarding e internacionalización",8,Experiencia
+B08,P1,"Dashboard diario responsive",8,Experiencia
+B09,P1,"Reflexión diaria y obstáculos",8,Experiencia
+B10,P1,"Indicadores y dashboards de tendencias",13,Analítica
+B11,P1,"Suscripciones y permisos Pro",13,Comercial
+B12,P1,"Panel administrativo y observabilidad",8,Operación
+B13,P1,"Privacidad, exportación y eliminación",8,Privacidad
+B14,P1,"Pruebas E2E y despliegue beta",8,Calidad
+B15,P2,"Experimentos y revisión semanal",13,Mejora continua
+B16,P2,"Plan nutricional por equivalentes",13,Nutrición
+B17,P2,"PWA offline y sincronización diferida",13,Plataforma
+B18,P2,"Notificaciones avanzadas",8,Retención
+B19,P3,"Integraciones de salud",13,Integraciones
+B20,P3,"Planes familiares y profesionales",21,Expansión
