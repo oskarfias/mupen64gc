@@ -206,6 +206,67 @@ await test('Exportación completa y eliminación de cuenta', async () => {
   eq((await fetch(`${B}/api/v1/me`, { headers: { cookie: Bc.cookie } })).status, 401, 'la sesión deja de funcionar');
 });
 
+await test('Reflexión opcional: obstáculos por hábito y fecha, cifrada, sin penalizar ni insistir', async () => {
+  clock = Date.parse('2026-12-21T18:00:00Z'); // 12:00 en Ciudad de México
+  const U = await client('rosa@ejemplo.mx');
+  const W = await client('victor@ejemplo.mx');
+  const h1 = (await U.call('POST', '/habits', habit('build', 'binary', { comparator: 'done' }))).body.id;
+  const h2 = (await U.call('POST', '/habits', habit('build', 'count', { comparator: '>=', target: 10 }, { name: 'Leer' }))).body.id;
+  const d = U.me.today;
+  const todayHtml = async () => (await fetch(`${B}/app/today`, { headers: { cookie: U.cookie } })).text();
+  const form = (body) => fetch(`${B}/app/reflexion`, { method: 'POST', redirect: 'manual', headers: { cookie: U.cookie, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: U.csrf, d, ...body }) });
+  assert(!(await todayHtml()).includes('reflect-cta'), 'a mediodía y sin tropiezos no se sugiere');
+  await U.call('PUT', `/habits/${h1}/log/${d}`, { status: 'missed' });
+  assert((await todayHtml()).includes('reflect-cta'), 'tras un no cumplido se sugiere (opcional)');
+  const m0 = JSON.stringify((await U.call('GET', '/analytics/adherence')).body.overall);
+  eq((await form({ action: 'dismiss' })).status, 303, '"Ahora no"');
+  assert(!(await todayHtml()).includes('reflect-cta'), 'tras "Ahora no" ya no insiste');
+  eq(JSON.stringify((await U.call('GET', '/analytics/adherence')).body.overall), m0, 'omitir la reflexión no cambia indicadores');
+  const r = await U.call('PUT', `/reviews/${d}`, { mood: 2, note: 'Llegué tarde del trabajo', intention_if: 'llego tarde', intention_then: 'hago 5 minutos',
+    obstacles: [{ habit_id: h1, key: 'time' }, { habit_id: h1, key: 'energy' }, { habit_id: null, key: 'stress' }, { habit_id: h1, key: 'inventado' }, { habit_id: h1, key: 'time' }] });
+  eq(r.status, 200, 'reflexión guardada'); eq(r.body.review.obstacles.length, 3, 'solo claves del catálogo, sin duplicados');
+  eq(r.body.review.note, 'Llegué tarde del trabajo', 'nota legible para su dueña');
+  const raw = app.db.get('SELECT note_enc, intention_if_enc FROM daily_reviews WHERE owner_id = ?', U.me.id);
+  assert(raw.note_enc && !raw.note_enc.includes('tarde') && !raw.intention_if_enc.includes('tarde'), 'nota e intención cifradas en la base');
+  eq(JSON.stringify((await U.call('GET', '/analytics/adherence')).body.overall), m0, 'guardar la reflexión no cambia indicadores');
+  const st = (await U.call('GET', '/analytics/obstacles')).body;
+  eq(st.obstacles_n, 3, 'obstáculos contados'); eq(st.habits[0].habit_id, h1, 'vinculados al hábito'); eq(st.mood_avg, 2, 'ánimo promedio'); eq(st.reviews_n, 1, 'días con reflexión');
+  const ins = await (await fetch(`${B}/app/insights`, { headers: { cookie: U.cookie } })).text();
+  assert(ins.includes('Obstáculos y ánimo') && ins.includes('Tiempo'), 'Indicadores muestran obstáculos');
+  // Aislamiento
+  eq((await W.call('PUT', `/reviews/${d}`, { obstacles: [{ habit_id: h1, key: 'time' }] })).status, 404, 'no se vinculan obstáculos a hábitos ajenos');
+  eq((await W.call('GET', `/reviews/${d}`)).body.review, null, 'no se ven reflexiones ajenas');
+  eq((await W.call('GET', '/analytics/obstacles')).body.obstacles_n, 0, 'estadísticas solo del usuario correcto');
+  eq((await U.call('PUT', `/reviews/${addDays(d, 1)}`, { mood: 3 })).status, 400, 'no se reflexiona sobre días futuros');
+  eq((await U.call('PUT', `/reviews/${addDays(d, -40)}`, { mood: 3 })).status, 402, 'Free: solo los últimos 30 días');
+  // Formulario HTML (ES) y corrección
+  const page = await (await fetch(`${B}/app/reflexion`, { headers: { cookie: U.cookie } })).text();
+  assert(page.includes('Cierre del día') && page.includes('value="' + h1 + '|time" checked'), 'formulario con lo guardado');
+  eq((await form({ action: 'save', mood: '4', 'ob[]': `${h1}|forgetting`, note: '' })).status, 303, 'corrección por formulario');
+  const st2 = (await U.call('GET', '/analytics/obstacles')).body;
+  eq(st2.obstacles_n, 1, 'la corrección recalcula'); eq(st2.obstacles[0].key, 'forgetting', 'obstáculo actualizado'); eq(st2.mood_avg, 4, 'ánimo actualizado');
+  const ex = await (await fetch(`${B}/api/v1/export`, { headers: { cookie: U.cookie } })).json();
+  eq(ex.reviews.length, 1, 'la exportación incluye reflexiones');
+  // Día cumplido por completo: no insiste
+  await U.call('DELETE', `/reviews/${d}`);
+  await U.call('PUT', `/habits/${h1}/log/${d}`, { status: 'done' });
+  await U.call('PUT', `/habits/${h2}/log/${d}`, { value: 12 });
+  const ok = await todayHtml();
+  assert(!ok.includes('reflect-cta') && ok.includes('Agregar una nota'), 'éxito total: solo un enlace discreto');
+  // Tarde con pendientes: se sugiere
+  const saved = clock;
+  clock = Date.parse(`${addDays(d, 1)}T01:30:00Z`); // 19:30 en Ciudad de México, mismo día local
+  const h3 = (await U.call('POST', '/habits', habit('build', 'binary', { comparator: 'done' }, { name: 'Meditar' }))).body.id;
+  assert((await todayHtml()).includes('reflect-cta'), 'por la tarde con pendientes se sugiere');
+  clock = saved;
+  await U.call('PATCH', `/habits/${h3}`, { status: 'archived' });
+  // Eliminar la cuenta borra reflexiones y obstáculos
+  const del = await fetch(`${B}/app/settings/eliminar`, { method: 'POST', redirect: 'manual', headers: { cookie: U.cookie, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: U.csrf, password: 'contrasena-segura-1' }) });
+  eq(del.status, 303, 'cuenta eliminada');
+  eq(app.db.get('SELECT COUNT(*) n FROM daily_reviews WHERE owner_id = ?', U.me.id).n, 0, 'reflexiones borradas');
+  eq(app.db.get('SELECT COUNT(*) n FROM review_obstacles WHERE owner_id = ?', U.me.id).n, 0, 'obstáculos borrados');
+});
+
 await test('Identidad: contraseña incorrecta, recuperación y sesiones revocadas', async () => {
   const bad = await fetch(`${B}/entrar`, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ email: 'ana@ejemplo.mx', password: 'mal' }) });
   eq(bad.status, 401, 'rechazada');

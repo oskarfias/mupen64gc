@@ -6,10 +6,11 @@ import { createApp } from './app.mjs';
 import { t } from './i18n.mjs';
 import { html, json, redirect, send, readForm, parseCookies, cookie, clientIp, limited, SECURITY_HEADERS } from '../photography/lib/http.mjs';
 import { sign, safeEqual } from '../photography/lib/security.mjs';
-import { isDate, addDays, isTimeZone } from './lib/tz.mjs';
+import { isDate, addDays, isTimeZone, localTime } from './lib/tz.mjs';
 import * as auth from './domain/auth.mjs';
 import * as H from './domain/habits.mjs';
 import * as onboarding from './domain/onboarding.mjs';
+import * as R from './domain/reflection.mjs';
 import * as V from './views/pages.mjs';
 
 const here = (import.meta.url ? dirname(fileURLToPath(import.meta.url)) : '.'); // en Cloudflare no hay rutas de archivo
@@ -151,7 +152,31 @@ async function route(app, req, res) {
     if (!user.onboarding_completed_at && !app.db.get('SELECT 1 FROM habits WHERE owner_id = ?', user.id)) return redirect(res, `${app.base}/onboarding`, 302);
     const td = H.today(app, user);
     const d = isDate(url.searchParams.get('d')) && url.searchParams.get('d') <= td ? url.searchParams.get('d') : td;
-    return page(V.todayPage(app, user, H.daily(app, user, d), csrf));
+    const day = H.daily(app, user, d);
+    const hour = Number(localTime(app.now(), user.timezone).slice(0, 2));
+    return page(V.todayPage(app, user, day, csrf, { reflection: R.prompt(app, user, day, { localHour: hour }), flash }));
+  }
+  if (path === '/app/reflexion') {
+    const td = H.today(app, user);
+    const d = isDate(url.searchParams.get('d') || form?.d) ? (url.searchParams.get('d') || form.d) : td;
+    const view = (opts = {}) => V.reflectionPage(app, user, { csrf, day: H.daily(app, user, d), review: R.getReview(app, user, d), barriers: R.BARRIERS, flash, ...opts });
+    try {
+      if (method === 'GET') {
+        if (d > td) throw Object.assign(new Error('invalid_date'), { code: 'invalid_date', status: 400 });
+        return page(view());
+      }
+      if (method === 'POST') {
+        if (form.action === 'dismiss') { R.dismissReview(app, user, d); return back(`/app/today${d === td ? '' : '?d=' + d}`); }
+        if (form.action === 'delete') { R.deleteReview(app, user, d); return back(`/app/today${d === td ? '' : '?d=' + d}`, tx.reflection.deleted); }
+        const obstacles = [].concat(form.ob || []).map((v) => { const [habit_id, key] = String(v).split('|'); return { habit_id: habit_id || null, key }; });
+        R.saveReview(app, user, d, { mood: form.mood, note: form.note, intention_if: form.intention_if, intention_then: form.intention_then, obstacles });
+        return back(`/app/today${d === td ? '' : '?d=' + d}`, tx.reflection.saved);
+      }
+    } catch (e) {
+      if (!e.code) throw e;
+      if (e.code === 'not_found') return html(res, V.messagePage(app, lang, tx.errors.not_found, '', [`${app.base}/app/today`, tx.nav.today]), { status: 404, noindex: true });
+      return html(res, V.messagePage(app, lang, tx.errors[e.code] || tx.errors.generic, '', [`${app.base}/app/today`, tx.nav.today]), { status: e.status || 400, noindex: true });
+    }
   }
   if (path === '/app/habits' && method === 'GET') {
     const habits = app.db.all('SELECT * FROM habits WHERE owner_id = ? ORDER BY status, sort, created_at', user.id).map((h) => ({ ...h, goal: H.goalAt(app, h.id, H.today(app, user)) }));
@@ -202,7 +227,8 @@ async function route(app, req, res) {
     const clamped = !pro && range > H.FREE_HISTORY_DAYS;
     if (clamped) range = H.FREE_HISTORY_DAYS;
     const td = H.today(app, user);
-    return page(V.insightsPage(app, user, H.metrics(app, user, addDays(td, -(range - 1)), td), { csrf, range, pro, clamped }));
+    const from = addDays(td, -(range - 1));
+    return page(V.insightsPage(app, user, H.metrics(app, user, from, td), { csrf, range, pro, clamped, obstacles: R.obstacleStats(app, user, from, td) }));
   }
   if (path === '/app/settings' && method === 'GET') return page(V.settingsPage(app, user, { csrf, pro: H.isPro(app, user.id), flash }));
   if (path === '/app/settings' && method === 'POST') {
@@ -283,9 +309,24 @@ async function api(app, req, res, p, url, user, ip) {
     if (clamped) from = minFree;
     return json(res, 200, { ...H.metrics(app, user, from, to, { habitId: url.searchParams.get('habit') || null }), history_limited: clamped });
   }
+  if ((m = p.match(/^\/reviews\/(\d{4}-\d{2}-\d{2})$/))) {
+    if (method === 'GET') return json(res, 200, { review: R.getReview(app, user, m[1]) });
+    if (method === 'PUT') return json(res, 200, { review: R.saveReview(app, user, m[1], body) });
+    if (method === 'DELETE') return json(res, 200, R.deleteReview(app, user, m[1]));
+  }
+  if ((m = p.match(/^\/reviews\/(\d{4}-\d{2}-\d{2})\/dismiss$/)) && method === 'POST') return json(res, 200, R.dismissReview(app, user, m[1]));
+  if (p === '/analytics/obstacles' && method === 'GET') {
+    const td = H.today(app, user);
+    let from = isDate(url.searchParams.get('from')) ? url.searchParams.get('from') : addDays(td, -29);
+    const to = isDate(url.searchParams.get('to')) ? url.searchParams.get('to') : td;
+    const minFree = addDays(td, -(H.FREE_HISTORY_DAYS - 1));
+    const clamped = !H.isPro(app, user.id) && from < minFree;
+    if (clamped) from = minFree;
+    return json(res, 200, { ...R.obstacleStats(app, user, from, to), history_limited: clamped });
+  }
   if (p === '/export' && method === 'GET') {
     app.audit(user.id, 'data_exported', 'user', user.id, { format: 'json' });
-    return send(res, 200, JSON.stringify(H.exportData(app, user.id), null, 2), { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="habitoos-datos.json"', 'Cache-Control': 'no-store' });
+    return send(res, 200, JSON.stringify({ ...H.exportData(app, user.id), reviews: R.exportReviews(app, user.id) }, null, 2), { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="habitoos-datos.json"', 'Cache-Control': 'no-store' });
   }
   if (p === '/export.csv' && method === 'GET') {
     app.audit(user.id, 'data_exported', 'user', user.id, { format: 'csv' });

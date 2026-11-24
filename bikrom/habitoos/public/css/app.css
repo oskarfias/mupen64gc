@@ -145,3 +145,15 @@ fieldset { min-width: 0; margin: 0; }
 .plan-card { padding: 14px; background: var(--surface-2); border: 1px solid var(--line); }
 .plan-card legend { padding: 0 6px; }
 .days { flex-wrap: wrap; }
+/* Reflexión diaria */
+.mood .chip span { font-size: 1.35rem; }
+.mood .chip:last-child span { font-size: .9rem; }
+.ifthen { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; }
+.ifthen > span { font-weight: 600; }
+fieldset.card { margin: 0; }
+fieldset.card legend { padding: 0 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bars { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.bars li { display: grid; grid-template-columns: minmax(90px, 35%) 1fr 2.5em; gap: 10px; align-items: center; font-size: .92rem; }
+.bars .bar { height: 10px; background: var(--line); border-radius: 999px; overflow: hidden; }
+.bars .bar i { display: block; height: 100%; background: var(--accent); }
+.bars strong { text-align: right; }

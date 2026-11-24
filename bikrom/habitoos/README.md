@@ -9,7 +9,7 @@ Plataforma de hábitos y mejora continua. Vive en **bikrom.com/habitoos**, dentr
 | Hecho y probado | Pendiente (siguientes fases del PRD) |
 |---|---|
 | Registro, entrada y salida, verificación de correo, recuperación de contraseña, sesiones revocables (hash en base), CSRF y límites de intentos | Google y Apple Sign-In |
-| Onboarding de 8 pasos, guardable y reanudable, idempotente | Reflexión diaria y obstáculos (B09) |
+| Onboarding de 8 pasos, guardable y reanudable, idempotente | Recordatorios por correo o notificación (B18) |
 | Hábitos para desarrollar, mantener, reducir y abandonar; medición sí/no, cantidad, duración o rango | Indicadores de resultado y gráficas avanzadas (B10) |
 | Metas y programación **versionadas**: cambiar una meta no reescribe la historia | Stripe Billing y plan Pro (B11) |
 | Today: registro en 1–2 toques, autoguardado idempotente, deshacer, 7 estados ("sin registro" ≠ "no cumplido") | Panel de administración SaaS (B12) |
@@ -17,6 +17,7 @@ Plataforma de hábitos y mejora continua. Vive en **bikrom.com/habitoos**, dentr
 | Adherencia, cobertura y recuperación con denominador visible; límite Free de 3 hábitos y 30 días aplicado en el backend | |
 | Exportación JSON y CSV; eliminación de cuenta con auditoría seudonimizada | |
 | ES/EN, zona horaria IANA por usuario, modo claro y oscuro, PWA instalable (manifest y service worker de recursos estáticos) | |
+| Reflexión diaria opcional (B09): ánimo, obstáculos por hábito y fecha, nota e intención "si X, entonces Y" cifradas; solo se sugiere tras tropiezos o por la tarde; omitirla no penaliza; frecuencias de obstáculos y ánimo en Indicadores | |
 
 ## Ejecutar y probar
 ```bash
@@ -42,4 +43,4 @@ npm test                  # Bikrom + Fotografía + HabitoOS
 ## Seguridad
 - **Aislamiento:** cada consulta filtra por `owner_id` mediante `ownHabit()`. Un recurso ajeno responde **404**; hay pruebas que intentan manipular identificadores.
 - **Contraseñas:** se guardan con scrypt. Los tokens de sesión, verificación y recuperación se guardan como hash SHA-256 y los enlaces son de un solo uso. Restablecer la contraseña cierra todas las sesiones.
-- **Administración:** el panel (fase B12) mostrará solo métricas agregadas. Las notas de reflexión (fase B09) se guardarán cifradas.
+- **Administración:** el panel (fase B12) mostrará solo métricas agregadas. Las notas e intenciones de la reflexión se guardan cifradas (AES-256-GCM con `APP_SECRET`; si se cambia `APP_SECRET` dejan de poder leerse).

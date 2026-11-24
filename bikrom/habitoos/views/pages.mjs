@@ -114,7 +114,7 @@ ${body}
 const csrfField = (csrf) => `<input type="hidden" name="_csrf" value="${esc(csrf)}">`;
 
 // ───────────── Today ─────────────
-export function todayPage(app, user, data, csrf) {
+export function todayPage(app, user, data, csrf, { reflection = 'none', flash = null } = {}) {
   const tx = t(user.locale);
   const s = data.summary;
   const isToday = data.date === data.today;
@@ -149,9 +149,55 @@ export function todayPage(app, user, data, csrf) {
     <div><strong data-sum="coverage">${s.coverage == null ? '—' : s.coverage + '%'}</strong><span class="small muted">${tx.today.coverage}</span></div></div>
   <ul class="list" data-day="${data.date}">${data.items.map(card).join('')}</ul>`
     : `<div class="card"><p>${tx.today.empty}</p><a class="btn btn--primary" href="${P(app, '/app/habits/nuevo')}">${tx.today.addFirst}</a></div>`}
+  ${reflectionCard(app, tx, { ...data, csrf }, reflection)}
   <div class="toast" hidden data-toast role="status"><span data-toast-text></span><button type="button" data-toast-undo>${tx.today.undo}</button></div>
   <script type="application/json" id="i18n">${JSON.stringify({ saved: tx.today.saved, error: tx.errors.generic, states: { done: tx.today.done, partial: tx.today.partial, missed: tx.today.missed, skipped: tx.today.skipped, not_applicable: tx.today.not_applicable, pending: tx.today.pendingState, no_data: tx.today.no_data } }).replace(/</g, '\\u003c')}</script>`;
-  return appShell(app, user, { title: tx.today.title, path: '/app/today', body, csrf, scripts: ['js/today.js'] });
+  return appShell(app, user, { title: tx.today.title, path: '/app/today', body, csrf, flash, scripts: ['js/today.js'] });
+}
+
+// Tarjeta de reflexión en Today: sugerida solo si el día tuvo tropiezos o sigue abierto por la tarde;
+// tras un día cumplido por completo queda como enlace discreto (no insiste).
+function reflectionCard(app, tx, data, state) {
+  const href = P(app, `/app/reflexion${data.date === data.today ? '' : '?d=' + data.date}`);
+  if (state === 'none') return '';
+  if (state === 'saved') return `<p class="small" style="margin-top:16px">✓ ${tx.reflection.savedToday} · <a href="${href}">${tx.reflection.edit}</a></p>`;
+  if (state === 'optional') return `<p class="small muted" style="margin-top:16px"><a href="${href}">${tx.reflection.addNote}</a></p>`;
+  return `<section class="card reflect-cta" style="margin-top:16px"><h2 style="margin-top:0">${tx.reflection.ctaTitle}</h2><p class="muted" style="margin-top:0">${tx.reflection.ctaText}</p>
+    <div class="row"><a class="btn btn--primary" href="${href}">${tx.reflection.open}</a>
+    <form method="post" action="${P(app, '/app/reflexion')}"><input type="hidden" name="_csrf" value="${esc(data.csrf || '')}"><input type="hidden" name="d" value="${data.date}"><input type="hidden" name="action" value="dismiss"><button class="btn btn--ghost">${tx.reflection.notNow}</button></form></div></section>`;
+}
+
+// ───────────── Reflexión diaria ─────────────
+export function reflectionPage(app, user, { csrf, day, review, barriers, flash = null }) {
+  const tx = t(user.locale);
+  const L = user.locale;
+  const r = review && !review.dismissed ? review : { mood: null, note: '', intention_if: '', intention_then: '', obstacles: [] };
+  const has = (habitId, key) => r.obstacles.some((o) => (o.habit_id || null) === habitId && o.obstacle_key === key);
+  const chips = (habitId) => `<div class="chips">${barriers.map(([k, l]) => `<label class="chip"><input type="checkbox" name="ob[]" value="${habitId || ''}|${k}"${has(habitId, k) ? ' checked' : ''}><span>${esc(l[L])}</span></label>`).join('')}</div>`;
+  const rough = day.items.filter((i) => ['missed', 'partial', 'skipped', 'no_data', 'pending'].includes(i.status));
+  const stateLabel = (s) => ({ missed: tx.today.missed, partial: tx.today.partial, skipped: tx.today.skipped, no_data: tx.today.no_data, pending: tx.today.pendingState }[s]);
+  const moods = ['😞', '😕', '😐', '🙂', '😄'];
+  const isToday = day.date === day.today;
+  const body = `<h1>${tx.reflection.title}</h1>
+  <p class="muted" style="margin-top:0">${esc(formatLongDate(day.date, L))} · ${tx.reflection.optionalAll}</p>
+  <form method="post" action="${P(app, '/app/reflexion')}" class="form">${csrfField(csrf)}<input type="hidden" name="d" value="${day.date}">
+    <fieldset class="field"><legend>${tx.reflection.mood} <span class="muted small">(${tx.common.optional})</span></legend>
+      <div class="chips mood">${moods.map((e, i) => `<label class="chip"><input type="radio" name="mood" value="${i + 1}"${r.mood === i + 1 ? ' checked' : ''}><span aria-label="${tx.reflection.moods[i]}" title="${tx.reflection.moods[i]}">${e}</span></label>`).join('')}
+      <label class="chip"><input type="radio" name="mood" value=""${r.mood == null ? ' checked' : ''}><span>${tx.reflection.noAnswer}</span></label></div></fieldset>
+    ${rough.length ? `<h2>${tx.reflection.obstaclesTitle}</h2><p class="small muted" style="margin-top:0">${tx.reflection.obstaclesHelp}</p>
+      ${rough.map((i) => `<fieldset class="field card"><legend>${esc(i.emoji || '•')} ${esc(i.name)} <span class="state state--${i.status}">${esc(stateLabel(i.status))}</span></legend>${chips(i.id)}</fieldset>`).join('')}` : ''}
+    <fieldset class="field"><legend>${rough.length ? tx.reflection.generalObstacles : tx.reflection.obstaclesTitle} <span class="muted small">(${tx.common.optional})</span></legend>${chips(null)}</fieldset>
+    <label class="field"><span>${tx.reflection.note} <span class="muted small">(${tx.common.optional})</span></span><textarea class="input" name="note" maxlength="1000" placeholder="${esc(tx.reflection.notePlaceholder)}">${esc(r.note)}</textarea>
+      <span class="small muted">🔒 ${tx.reflection.private}</span></label>
+    <fieldset class="field"><legend>${tx.reflection.intention} <span class="muted small">(${tx.common.optional})</span></legend>
+      <div class="ifthen"><span>${tx.reflection.if}</span><input class="input" name="intention_if" maxlength="200" value="${esc(r.intention_if)}" placeholder="${esc(tx.reflection.ifPlaceholder)}">
+      <span>${tx.reflection.then}</span><input class="input" name="intention_then" maxlength="200" value="${esc(r.intention_then)}" placeholder="${esc(tx.reflection.thenPlaceholder)}"></div></fieldset>
+    <div class="row"><button class="btn btn--primary" name="action" value="save">${tx.reflection.save}</button>
+      <a class="btn btn--ghost" href="${P(app, '/app/today' + (isToday ? '' : '?d=' + day.date))}">${tx.common.cancel}</a></div>
+  </form>
+  ${review && !review.dismissed ? `<form method="post" action="${P(app, '/app/reflexion')}" style="margin-top:20px">${csrfField(csrf)}<input type="hidden" name="d" value="${day.date}"><input type="hidden" name="action" value="delete"><button class="btn btn--ghost small">${tx.reflection.delete}</button></form>` : ''}
+  <p class="small muted" style="margin-top:16px">${tx.reflection.noPenalty}</p>`;
+  return appShell(app, user, { title: tx.reflection.title, path: '/app/today', body, csrf, flash });
 }
 
 // ───────────── Hábitos ─────────────
@@ -232,7 +278,7 @@ export function habitDetail(app, user, h, { csrf, goals, schedule, error = null,
 }
 
 // ───────────── Indicadores ─────────────
-export function insightsPage(app, user, m, { csrf, range, pro, clamped }) {
+export function insightsPage(app, user, m, { csrf, range, pro, clamped, obstacles = null }) {
   const tx = t(user.locale);
   const pct = (v) => (v == null ? '—' : `${v}%`);
   const ranges = pro ? [7, 30, 90, 180, 365] : [7, 30];
@@ -250,8 +296,25 @@ export function insightsPage(app, user, m, { csrf, range, pro, clamped }) {
     <div class="dots" role="img" aria-label="${tx.insights.calendar}">${h.series.map((d) => `<span class="dot dot--${d.status}" title="${d.date}: ${esc(tx.today[d.status === 'pending' ? 'pendingState' : d.status] || d.status)}${d.value != null ? ' · ' + fmtNum(d.value) : ''}"></span>`).join('')}</div>
   </section>`).join('')}
   <div class="legend"><span><i class="dot dot--done"></i>${tx.today.done}</span><span><i class="dot dot--partial"></i>${tx.today.partial}</span><span><i class="dot dot--missed"></i>${tx.today.missed}</span><span><i class="dot"></i>${tx.today.no_data}</span><span><i class="dot dot--skipped"></i>${tx.today.skipped} / ${tx.today.paused}</span></div>
-  <p class="small muted" style="margin-top:16px">${tx.insights.recoveryHelp}</p>`;
+  <p class="small muted" style="margin-top:16px">${tx.insights.recoveryHelp}</p>
+  ${obstacles ? obstaclesSection(tx, user.locale, obstacles) : ''}`;
   return appShell(app, user, { title: tx.insights.title, path: '/app/insights', body, csrf });
+}
+
+// Obstáculos y ánimo: frecuencias descriptivas con su n; sin conclusiones causales.
+function obstaclesSection(tx, L, o) {
+  const label = (k) => BARRIERS.find(([x]) => x === k)?.[1][L] || k;
+  const max = Math.max(1, ...o.obstacles.map((x) => x.n));
+  const bars = (list) => `<ul class="bars">${list.map((x) => `<li><span>${esc(label(x.key))}</span><span class="bar" aria-hidden="true"><i style="width:${Math.round((x.n / max) * 100)}%"></i></span><strong>${x.n}</strong></li>`).join('')}</ul>`;
+  return `<h2 style="margin-top:28px">${tx.reflection.insightsTitle}</h2>
+  ${o.reviews_n || o.obstacles_n ? `<div class="kpis">
+    <div class="kpi"><span class="small muted">${tx.reflection.reviewsCount}</span><strong>${o.reviews_n}</strong></div>
+    <div class="kpi"><span class="small muted">${tx.reflection.moodAvg}</span><strong>${o.mood_avg == null ? '—' : o.mood_avg + ' / 5'}</strong><span class="small muted">${tx.insights.n} = ${o.mood_n}</span></div>
+    <div class="kpi"><span class="small muted">${tx.reflection.obstaclesCount}</span><strong>${o.obstacles_n}</strong></div></div>
+    ${o.obstacles.length ? `<section class="card" style="margin-top:14px"><h3 style="margin-top:0">${tx.reflection.topObstacles}</h3>${bars(o.obstacles)}</section>` : ''}
+    ${o.habits.map((h) => `<section class="card" style="margin-top:14px"><h3 style="margin-top:0">${esc(h.emoji || '')} ${esc(h.name)}</h3>${bars(h.keys)}</section>`).join('')}
+    ${o.obstacles_n < 5 ? `<p class="small muted">${tx.insights.fewData}</p>` : ''}
+    <p class="small muted">${tx.reflection.noCausal}</p>` : `<p class="muted">${tx.reflection.insightsEmpty}</p>`}`;
 }
 
 // ───────────── Cuenta ─────────────
