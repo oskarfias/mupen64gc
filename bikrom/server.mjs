@@ -20,6 +20,9 @@ const { renderAdmin, toCsv } = await import('./server/admin.js');
 // Sección Bikrom Photography (Estefanía Torres Fotografía): app propia montada en /photography
 const { createPhotography } = await import('./photography/index.mjs');
 const photography = createPhotography({ env: process.env });
+// Bikrom/HabitoOS: app propia montada en /habitoos
+const { createHabitoos } = await import('./habitoos/index.mjs');
+const habitoos = createHabitoos({ env: process.env });
 
 const env = process.env;
 const PORT = Number(env.PORT || 3000);
@@ -395,6 +398,7 @@ const server = createServer(async (req, res) => {
     return res.end();
   }
   if (p === '/photography' || p.startsWith('/photography/')) return photography.handle(req, res);
+  if (p === '/habitoos' || p.startsWith('/habitoos/')) return habitoos.handle(req, res);
   try {
     if (req.method === 'POST' && p.startsWith('/api/') && !p.startsWith('/api/webhooks/') && rateLimited(req)) return json(res, 429, { error: 'Demasiadas solicitudes. Intenta en un minuto.' });
     if (req.method === 'POST' && p === '/api/diagnostico') return await apiDiagnostico(req, res);

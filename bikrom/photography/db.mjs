@@ -6,23 +6,23 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-export function openDb(file) {
+export function openDb(file, migrationsDir = join(here, 'migrations')) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
-  migrate(db);
+  migrate(db, migrationsDir);
   return wrap(db);
 }
 
-function migrate(db) {
+function migrate(db, dir) {
   db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)');
   const done = new Set(db.prepare('SELECT version FROM schema_migrations').all().map((r) => r.version));
-  const files = readdirSync(join(here, 'migrations')).filter((f) => f.endsWith('.sql')).sort();
+  const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
   for (const f of files) {
     if (done.has(f)) continue;
     db.exec('BEGIN IMMEDIATE');
     try {
-      db.exec(readFileSync(join(here, 'migrations', f), 'utf8'));
+      db.exec(readFileSync(join(dir, f), 'utf8'));
       db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(f, Date.now());
       db.exec('COMMIT');
     } catch (e) {

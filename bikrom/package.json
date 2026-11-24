@@ -13,6 +13,8 @@
     "dev": "node build.mjs && node --disable-warning=ExperimentalWarning server.mjs",
     "check": "node build.mjs && node scripts/check.mjs",
     "photo": "node --disable-warning=ExperimentalWarning photography/server.mjs",
-    "photo:test": "node --disable-warning=ExperimentalWarning photography/tests/run.mjs"
+    "photo:test": "node --disable-warning=ExperimentalWarning photography/tests/run.mjs",
+    "habitoos:test": "node --disable-warning=ExperimentalWarning habitoos/tests/run.mjs",
+    "test": "npm run -s check && npm run -s photo:test && npm run -s habitoos:test"
   }
 }
