@@ -41,7 +41,8 @@ export class Bikrom extends DurableObject {
     return runNode(this.apps.site.handle, request, (request.headers.get('x-forwarded-for') || '').split(',')[0]);
   }
   async runJobs() {
-    return this.apps.photography.runJobs();
+    const [photos, reminders] = await Promise.all([this.apps.photography.runJobs(), this.apps.habitoos.runJobs()]);
+    return { photos, reminders };
   }
 }
 
@@ -70,7 +71,7 @@ async function boot(ctx, env) {
   ]);
   const penv = process.env;
   const photography = createPhotography({ env: penv, worker: false, ...(env.PHOTOS ? { storage: r2Storage(env.PHOTOS) } : {}), db: sqlDb(ctx.storage, { namespace: 'photography', migrations: migrations.photography }) });
-  const habitoos = createHabitoos({ env: penv, db: sqlDb(ctx.storage, { namespace: 'habitoos', migrations: migrations.habitoos }) });
+  const habitoos = createHabitoos({ env: penv, worker: false, db: sqlDb(ctx.storage, { namespace: 'habitoos', migrations: migrations.habitoos }) });
   const store = sqlStore(sqlDb(ctx.storage, { namespace: 'site' }));
   const files = {
     // Normalmente los archivos estáticos no llegan aquí (los sirve el Worker); por si acaso:

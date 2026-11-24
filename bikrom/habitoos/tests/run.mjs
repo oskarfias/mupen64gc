@@ -7,13 +7,15 @@ import { join } from 'node:path';
 import { createHabitoos } from '../index.mjs';
 import * as H from '../domain/habits.mjs';
 import { addDays } from '../lib/tz.mjs';
+import { createHmac } from 'node:crypto';
+import { resetLimit } from '../../photography/lib/http.mjs';
 
 const dir = mkdtempSync(join(tmpdir(), 'hos-test-'));
 let clock = Date.parse('2026-12-01T18:00:00Z'); // 12:00 en Ciudad de México
-const env = { NODE_ENV: 'test', APP_SECRET: 'y'.repeat(40), SITE_URL: 'http://localhost' };
+const env = { NODE_ENV: 'test', APP_SECRET: 'y'.repeat(40), SITE_URL: 'http://localhost', HABITOOS_STRIPE_SECRET_KEY: 'sk_test_local', HABITOOS_STRIPE_WEBHOOK_SECRET: 'whsec_hos_local' };
 // CF_SHIM=1: misma prueba sobre la capa de Cloudflare (base del Durable Object)
 const cf = process.env.CF_SHIM ? (await import('../../cloudflare/test-shim.mjs')).shim('habitoos') : {};
-const { app, handle } = createHabitoos({ env, dataDir: dir, now: () => clock, ...cf });
+const { app, handle, runJobs } = createHabitoos({ env, dataDir: dir, now: () => clock, worker: false, ...cf });
 const server = createServer(handle).listen(0);
 const B = `http://localhost:${server.address().port}/habitoos`;
 
@@ -28,6 +30,7 @@ const origLog = console.log;
 
 // Cliente HTTP con cookie y CSRF, como un navegador
 async function client(email, password = 'contrasena-segura-1', { timezone = 'America/Mexico_City', lang = 'es' } = {}) {
+  for (const ip of ['::1', '127.0.0.1', '::ffff:127.0.0.1']) resetLimit(`hos-reg:${ip}`); // el límite por IP se prueba aparte
   console.log = () => {}; // el correo sin proveedor se imprime en desarrollo
   const r = await fetch(`${B}/registro`, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ email, password, terms: '1', lang, timezone }) });
   console.log = origLog;
@@ -265,6 +268,142 @@ await test('Reflexión opcional: obstáculos por hábito y fecha, cifrada, sin p
   eq(del.status, 303, 'cuenta eliminada');
   eq(app.db.get('SELECT COUNT(*) n FROM daily_reviews WHERE owner_id = ?', U.me.id).n, 0, 'reflexiones borradas');
   eq(app.db.get('SELECT COUNT(*) n FROM review_obstacles WHERE owner_id = ?', U.me.id).n, 0, 'obstáculos borrados');
+});
+
+await test('Tendencias por semana, línea base y recálculo tras corrección', async () => {
+  clock = Date.parse('2027-01-04T18:00:00Z'); // lunes 4 de enero, 12:00 en México
+  const U = await client('tendencias@ejemplo.mx');
+  const id = (await U.call('POST', '/habits', habit('build', 'duration', { comparator: '>=', target: 20 }, { name: 'Correr' }))).body.id;
+  const start = U.me.today;
+  // 5 semanas: semanas 1-2 cumple 3 de 7 días (resto no cumplido); semanas 3-5 cumple todos.
+  for (let i = 0; i < 35; i++) {
+    const d = addDays(start, i);
+    const done = i >= 14 || i % 7 < 3;
+    H.logOccurrence(app, U.user(), id, d, { value: done ? 25 : 5 });
+    clock += 864e5;
+  }
+  // 35 días después la sesión de 30 días venció: se vuelve a entrar
+  const li = await fetch(`${B}/entrar`, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ email: 'tendencias@ejemplo.mx', password: 'contrasena-segura-1' }) });
+  U.cookie = li.headers.get('set-cookie').split(';')[0];
+  U.csrf = (await (await fetch(`${B}/app/today`, { headers: { cookie: U.cookie } })).text()).match(/name="csrf" content="([^"]+)"/)[1];
+  U.call = async (method, path, body) => { const r = await fetch(`${B}/api/v1${path}`, { method, headers: { cookie: U.cookie, 'X-CSRF': U.csrf, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, body: await r.json().catch(() => ({})) }; };
+  const tr = (await U.call('GET', `/analytics/trends?from=${start}&to=${addDays(start, 34)}`)).body;
+  eq(tr.bucket, 'week', 'agrupado por semana');
+  eq(tr.history_limited, true, 'Free: el periodo se recorta a 30 días');
+  const pro = app.id();
+  app.db.run("INSERT INTO entitlements (id, owner_id, feature, source, valid_until, created_at) VALUES (?, ?, 'pro', 'admin_grant', NULL, ?)", pro, U.me.id, app.iso());
+  const t2 = (await U.call('GET', `/analytics/trends?from=${start}&to=${addDays(start, 34)}`)).body;
+  eq(t2.history_limited, false, 'Pro: historial completo');
+  const h = t2.habits[0];
+  eq(h.series.length, 5, 'cinco semanas');
+  eq(h.series[0].adherence, 42.9, 'semana 1: 3/7'); eq(h.series[0].adherence_n, 7, 'n semana 1');
+  eq(h.series[4].adherence, 100, 'semana 5: 7/7');
+  eq(h.series[0].value_avg, Math.round(((3 * 25 + 4 * 5) / 7) * 10) / 10, 'promedio del valor (resultado)');
+  eq(h.comparison.available, true, 'comparación disponible');
+  eq(h.comparison.baseline.adherence, 42.9, 'línea base = primeros 14 días'); eq(h.comparison.recent.adherence, 100, 'recientes 14 días');
+  eq(h.comparison.adherence_diff, 57.1, 'cambio en puntos');
+  // Corrección histórica: la semana 1 se recalcula
+  H.logOccurrence(app, U.user(), id, addDays(start, 3), { value: 30 });
+  const t3 = (await U.call('GET', `/analytics/trends?from=${start}&to=${addDays(start, 34)}`)).body;
+  eq(t3.habits[0].series[0].adherence, 57.1, 'la corrección recalcula la tendencia (4/7)');
+  const m = (await U.call('GET', `/analytics/trends?from=${start}&to=${addDays(start, 34)}&bucket=month`)).body;
+  eq(m.bucket, 'month', 'agrupado por mes'); eq(m.habits[0].series.length, 2, 'enero y febrero');
+  const html = await (await fetch(`${B}/app/insights?r=90`, { headers: { cookie: U.cookie } })).text();
+  assert(html.includes('<svg') && html.includes('Línea base'), 'Indicadores con gráfica y línea base');
+  const V2 = await client('ajeno@ejemplo.mx');
+  eq((await V2.call('GET', '/analytics/trends')).body.habits.length, 0, 'tendencias solo del usuario correcto');
+});
+
+await test('Pro: consentimiento, precio del servidor, webhook idempotente, cancelación y datos conservados', async () => {
+  clock = Date.parse('2027-03-01T18:00:00Z');
+  // Stripe de prueba (sin red)
+  const subs = new Map();
+  let lastCheckout = null;
+  app.billing.createCheckout = async (a) => { lastCheckout = a; return { url: `https://checkout.stripe.test/${a.attemptId}`, ref: `cs_${a.attemptId}` }; };
+  app.billing.getSubscription = async (id) => subs.get(id);
+  app.billing.setCancelAtPeriodEnd = async (id, v) => { const x = { ...subs.get(id), cancel_at_period_end: v }; subs.set(id, x); return x; };
+  const hook = (ev, secret = 'whsec_hos_local') => {
+    const raw = JSON.stringify(ev); const ts = Math.floor(Date.now() / 1000);
+    const sig = createHmac('sha256', secret).update(`${ts}.${raw}`).digest('hex');
+    return fetch(`${B}/api/webhooks/stripe`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': `t=${ts},v1=${sig}` }, body: raw });
+  };
+  const U = await client('pro@ejemplo.mx');
+  for (const n of ['A', 'B', 'C']) await U.call('POST', '/habits', habit('build', 'binary', { comparator: 'done' }, { name: n }));
+  eq((await U.call('POST', '/habits', habit('build', 'binary', { comparator: 'done' }, { name: 'D' }))).status, 402, 'Free: 4.º hábito bloqueado');
+  const planHtml = await (await fetch(`${B}/app/plan`, { headers: { cookie: U.cookie } })).text();
+  assert(planHtml.includes('39.99') && planHtml.includes('4.99') && planHtml.includes('name="consent"'), 'precios configurables y casilla de consentimiento');
+  eq((await U.call('POST', '/billing/checkout', { plan: 'pro_yearly' })).status, 400, 'sin consentimiento no hay cobro');
+  const form = await fetch(`${B}/app/plan/checkout`, { method: 'POST', redirect: 'manual', headers: { cookie: U.cookie, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: U.csrf, plan: 'pro_yearly', consent: '1', amount: '1' }) });
+  eq(form.status, 303, 'redirige al pago'); assert(form.headers.get('location').startsWith('https://checkout.stripe.test/'), 'a Stripe');
+  eq(lastCheckout.amountCents, 3999, 'el precio sale del servidor, no del navegador'); eq(lastCheckout.interval, 'year', 'anual');
+  eq((await U.call('GET', '/billing')).body.pro, false, 'sin webhook no se activa');
+  const periodEnd = Math.floor(clock / 1000) + 365 * 86400;
+  subs.set('sub_1', { id: 'sub_1', customer: 'cus_1', status: 'active', cancel_at_period_end: false, metadata: { user_id: U.me.id, plan: 'pro_yearly' }, items: { data: [{ current_period_end: periodEnd, price: { unit_amount: 3999, currency: 'usd', recurring: { interval: 'year' } } }] } });
+  const ev = { id: 'evt_1', type: 'checkout.session.completed', data: { object: { mode: 'subscription', subscription: 'sub_1', client_reference_id: U.me.id, metadata: { plan: 'pro_yearly' } } } };
+  eq((await hook(ev, 'otro_secreto')).status, 400, 'firma inválida rechazada');
+  eq((await (await hook(ev)).json()).result, 'processed', 'webhook procesado');
+  eq((await (await hook(ev)).json()).result, 'duplicate', 'el mismo evento no se procesa dos veces');
+  eq(app.db.get("SELECT COUNT(*) n FROM entitlements WHERE owner_id = ? AND source = 'subscription'", U.me.id).n, 1, 'un solo permiso');
+  eq((await U.call('GET', '/billing')).body.pro, true, 'Pro activo');
+  eq((await U.call('POST', '/habits', habit('build', 'binary', { comparator: 'done' }, { name: 'D' }))).status, 201, 'Pro: más de 3 hábitos');
+  eq((await U.call('POST', '/billing/checkout', { plan: 'pro_monthly', consent: true })).status, 409, 'no se compra dos veces');
+  // Cancelar: conserva Pro hasta el final del periodo
+  const c = await U.call('POST', '/billing/cancel');
+  eq(c.body.subscription.cancel_at_period_end, true, 'cancelación al final del periodo'); eq(c.body.pro, true, 'sigue siendo Pro');
+  assert((await (await fetch(`${B}/app/plan`, { headers: { cookie: U.cookie } })).text()).includes('Pro termina el'), 'la página muestra la fecha de fin');
+  // Fin del periodo pagado: vuelve a Free sin borrar datos
+  clock = (periodEnd + 3600) * 1000;
+  eq(H.isPro(app, U.me.id), false, 'tras el periodo pagado ya no es Pro');
+  eq(app.db.get('SELECT COUNT(*) n FROM habits WHERE owner_id = ?', U.me.id).n, 4, 'los 4 hábitos se conservan');
+  // Aviso final del proveedor
+  const del = { id: 'evt_2', type: 'customer.subscription.deleted', data: { object: { ...subs.get('sub_1'), status: 'canceled' } } };
+  eq((await (await hook(del)).json()).result, 'processed', 'baja procesada');
+  eq(app.db.get('SELECT status FROM subscriptions WHERE provider_subscription_id = ?', 'sub_1').status, 'canceled', 'estado del proveedor guardado');
+  // Evento de un usuario inexistente: se ignora sin error
+  subs.set('sub_x', { ...subs.get('sub_1'), id: 'sub_x', metadata: { user_id: 'no-existe' } });
+  eq((await hook({ id: 'evt_3', type: 'invoice.paid', data: { object: { subscription: 'sub_x' } } })).status, 200, 'usuario inexistente ignorado');
+  const ex = await (await fetch(`${B}/api/v1/export`, { headers: { cookie: (await (async () => { const li = await fetch(`${B}/entrar`, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ email: 'pro@ejemplo.mx', password: 'contrasena-segura-1' }) }); return li.headers.get('set-cookie').split(';')[0]; })()) } })).json();
+  eq(ex.subscriptions.length, 1, 'la exportación incluye la suscripción');
+});
+
+await test('Recordatorios: opt-in, hora local, sin duplicados, nada si ya se registró, baja en un clic', async () => {
+  clock = Date.parse('2027-05-03T13:00:00Z'); // 07:00 en México
+  const U = await client('recuerda@ejemplo.mx');
+  const sent = [];
+  const realMail = app.mail;
+  app.mail = { configured: true, send: async (m) => { sent.push(m); return 'id'; } };
+  try {
+  const set = (body) => fetch(`${B}/app/settings/recordatorios`, { method: 'POST', redirect: 'manual', headers: { cookie: U.cookie, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: U.csrf, ...body }) });
+  eq((await set({ enabled: '1' })).status, 400, 'sin correo verificado no se activan');
+  app.db.run('UPDATE users SET email_verified_at = ? WHERE id = ?', app.iso(), U.me.id);
+  eq((await set({ enabled: '1', digest_time: '20:00' })).status, 303, 'activados con resumen a las 20:00');
+  const a = (await U.call('POST', '/habits', habit('build', 'binary', { comparator: 'done' }, { name: 'Vitaminas', time: '08:00' }))).body.id;
+  const b = (await U.call('POST', '/habits', habit('build', 'binary', { comparator: 'done' }, { name: 'Estirar', time: '08:00' }))).body.id;
+  const c = (await U.call('POST', '/habits', habit('build', 'binary', { comparator: 'done' }, { name: 'Leer' }))).body.id;
+  await runJobs(); eq(sent.length, 0, 'antes de la hora no se envía');
+  clock = Date.parse('2027-05-03T14:10:00Z'); // 08:10
+  await runJobs(); eq(sent.length, 1, 'un correo para la franja de las 08:00');
+  assert(sent[0].subject.includes('2') && sent[0].text.includes('Vitaminas') && sent[0].text.includes('Estirar') && !sent[0].text.includes('Leer'), 'agrupa los hábitos de esa hora');
+  assert(sent[0].text.includes('/recordatorios/baja?u='), 'incluye enlace de baja');
+  await runJobs(); eq(sent.length, 1, 'sin duplicados en la misma franja');
+  clock = Date.parse('2027-05-04T14:05:00Z'); // día siguiente 08:05; "Vitaminas" ya registrado
+  await U.call('PUT', `/habits/${a}/log/2027-05-04`, { status: 'done' });
+  await runJobs(); eq(sent.length, 2, 'nuevo día, nuevo recordatorio');
+  assert(!sent[1].text.includes('Vitaminas') && sent[1].text.includes('Estirar'), 'no recuerda lo ya registrado');
+  clock = Date.parse('2027-05-04T16:30:00Z'); // 10:30: fuera de la ventana
+  await runJobs(); eq(sent.length, 2, 'fuera de la ventana no se envía tarde');
+  clock = Date.parse('2027-05-05T02:15:00Z'); // 20:15 del 4: resumen
+  await runJobs(); eq(sent.length, 3, 'resumen diario');
+  assert(sent[2].text.includes('Leer') && sent[2].text.includes('Estirar') && !sent[2].text.includes('Vitaminas'), 'resumen solo con pendientes');
+  // Baja en un clic
+  const link = sent[2].text.match(/(http\S+recordatorios\/baja\S+)/)[1].replace('http://localhost/habitoos', B);
+  eq((await fetch(link.replace(/s=[^&]+/, 's=falso'))).status, 200, 'enlace alterado');
+  eq(app.db.get('SELECT reminders_email FROM profiles WHERE user_id = ?', U.me.id).reminders_email, 1, 'una firma falsa no da de baja');
+  await fetch(link);
+  eq(app.db.get('SELECT reminders_email FROM profiles WHERE user_id = ?', U.me.id).reminders_email, 0, 'baja con un clic');
+  clock = Date.parse('2027-05-05T14:10:00Z');
+  await runJobs(); eq(sent.length, 3, 'tras la baja no llegan más');
+  } finally { app.mail = realMail; }
 });
 
 await test('Identidad: contraseña incorrecta, recuperación y sesiones revocadas', async () => {

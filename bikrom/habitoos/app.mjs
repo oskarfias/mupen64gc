@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { openDb } from '../photography/db.mjs';
 import { mailAdapter } from '../photography/lib/providers.mjs';
+import { stripeBilling } from './lib/stripe.mjs';
 
 const here = (import.meta.url ? dirname(fileURLToPath(import.meta.url)) : '.'); // en Cloudflare no hay rutas de archivo
 export const BASE = '/habitoos';
@@ -19,6 +20,8 @@ export function createApp({ env = process.env, dataDir, dbFile, now, db: givenDb
     siteUrl: (env.HABITOOS_SITE_URL || env.SITE_URL || 'http://localhost:3000').replace(/\/$/, ''),
     // Correo propio de HabitoOS (remitente independiente del de fotografía)
     mail: mailAdapter({ RESEND_API_KEY: env.RESEND_API_KEY, PHOTO_EMAIL_FROM: env.HABITOOS_EMAIL_FROM }),
+    // Suscripción Pro (Stripe, claves propias de HabitoOS)
+    billing: stripeBilling(env),
   };
   app.iso = () => new Date(app.now()).toISOString();
   app.id = () => randomUUID();

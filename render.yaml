@@ -61,3 +61,7 @@ services:
       # ── Bikrom/HabitoOS (/habitoos) ──
       - key: HABITOOS_EMAIL_FROM
         sync: false
+      - key: HABITOOS_STRIPE_SECRET_KEY
+        sync: false
+      - key: HABITOOS_STRIPE_WEBHOOK_SECRET
+        sync: false

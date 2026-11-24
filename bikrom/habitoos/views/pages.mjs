@@ -215,7 +215,7 @@ function goalFields(tx, goal = {}, measure = 'count') {
 export function habitsPage(app, user, habits, { csrf, pro, flash }) {
   const tx = t(user.locale);
   const active = habits.filter((h) => h.status === 'active').length;
-  const body = `<div class="today-head"><div><h1>${tx.habits.title}</h1>${pro ? '' : `<p class="muted small" style="margin:0">${tx.habits.freeNote} (${active}/3)</p>`}</div>
+  const body = `<div class="today-head"><div><h1>${tx.habits.title}</h1>${pro ? '' : `<p class="muted small" style="margin:0">${tx.habits.freeNote} (${active}/3) · <a href="${P(app, '/app/plan')}">${tx.plan.seePro}</a></p>`}</div>
     <a class="btn btn--primary" href="${P(app, '/app/habits/nuevo')}">+ ${tx.habits.new}</a></div>
   <ul class="list">${habits.map((h) => `<li class="habit"><div class="habit-top"><span class="habit-emoji" aria-hidden="true">${esc(h.emoji || '•')}</span>
     <div><a class="habit-name" href="${P(app, `/app/habits/${h.id}`)}">${esc(h.name)}</a><div class="habit-goal">${esc(tx.habits.kinds[h.kind])} · ${esc(goalLabel(h.goal, h.unit, tx))}</div></div>
@@ -278,27 +278,61 @@ export function habitDetail(app, user, h, { csrf, goals, schedule, error = null,
 }
 
 // ───────────── Indicadores ─────────────
-export function insightsPage(app, user, m, { csrf, range, pro, clamped, obstacles = null }) {
+export function insightsPage(app, user, m, { csrf, range, pro, clamped, obstacles = null, trends = null }) {
   const tx = t(user.locale);
   const pct = (v) => (v == null ? '—' : `${v}%`);
   const ranges = pro ? [7, 30, 90, 180, 365] : [7, 30];
   const kpi = (label, value, n, help) => `<div class="kpi"><span class="small muted">${label}</span><strong>${value}</strong><span class="small muted">${tx.insights.n} = ${n}</span><p class="small muted" style="margin:6px 0 0">${help}</p></div>`;
   const body = `<h1>${tx.insights.title}</h1>
   <nav class="chips" aria-label="${tx.insights.range}" style="margin:12px 0">${ranges.map((r) => `<a class="btn${r === range ? ' btn--primary' : ''}" href="?r=${r}">${r} ${tx.insights.days}</a>`).join('')}</nav>
-  ${clamped || !pro ? `<p class="small muted">${tx.insights.freeHistory}</p>` : ''}
+  ${clamped || !pro ? `<p class="small muted">${tx.insights.freeHistory} <a href="${P(app, '/app/plan')}">${tx.plan.seePro}</a></p>` : ''}
   <p class="small muted">${m.from} → ${m.to}</p>
   <h2>${tx.insights.overall}</h2>
+  ${trends ? trendChart(tx, user.locale, trends.overall, trends.bucket, tx.insights.adherenceTrend) : ''}
   ${m.overall.adherence_n || m.overall.coverage_n ? `<div class="kpis">${kpi(tx.insights.adherence, pct(m.overall.adherence), m.overall.adherence_n, tx.insights.adherenceHelp)}${kpi(tx.insights.coverage, pct(m.overall.coverage), m.overall.coverage_n, tx.insights.coverageHelp)}</div>
     ${m.overall.adherence_n < 7 ? `<p class="small muted">${tx.insights.fewData}</p>` : ''}` : `<p class="muted">${tx.insights.noData}</p>`}
   ${m.habits.map((h) => `<section class="card" style="margin-top:14px"><h2 style="margin-top:0">${esc(h.emoji || '')} ${esc(h.name)}</h2>
     <div class="kpis">${kpi(tx.insights.adherence, pct(h.adherence), h.adherence_n, '')}${kpi(tx.insights.coverage, pct(h.coverage), h.coverage_n, '')}
       ${kpi(tx.insights.recovery, h.recovery_avg == null ? '—' : `${h.recovery_avg} ${tx.insights.opportunities}`, h.recovery_n, '')}</div>
+    ${trends ? habitTrend(tx, user.locale, trends.habits.find((x) => x.habit_id === h.habit_id), trends.bucket) : ''}
     <div class="dots" role="img" aria-label="${tx.insights.calendar}">${h.series.map((d) => `<span class="dot dot--${d.status}" title="${d.date}: ${esc(tx.today[d.status === 'pending' ? 'pendingState' : d.status] || d.status)}${d.value != null ? ' · ' + fmtNum(d.value) : ''}"></span>`).join('')}</div>
   </section>`).join('')}
   <div class="legend"><span><i class="dot dot--done"></i>${tx.today.done}</span><span><i class="dot dot--partial"></i>${tx.today.partial}</span><span><i class="dot dot--missed"></i>${tx.today.missed}</span><span><i class="dot"></i>${tx.today.no_data}</span><span><i class="dot dot--skipped"></i>${tx.today.skipped} / ${tx.today.paused}</span></div>
   <p class="small muted" style="margin-top:16px">${tx.insights.recoveryHelp}</p>
   ${obstacles ? obstaclesSection(tx, user.locale, obstacles) : ''}`;
   return appShell(app, user, { title: tx.insights.title, path: '/app/insights', body, csrf });
+}
+
+// Gráfica de barras en SVG (sin librerías): adherencia por semana o mes, con n en cada barra.
+const shortDate = (d, L, bucket) => new Intl.DateTimeFormat(L === 'en' ? 'en-US' : 'es-MX', bucket === 'month' ? { month: 'short', timeZone: 'UTC' } : { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`));
+function trendChart(tx, L, series, bucket, title, key = 'adherence') {
+  if (!series.some((s) => s[key] != null)) return '';
+  const W = 44, H = 120, top = 18, w = series.length * W;
+  const bars = series.map((s, i) => {
+    const x = i * W + 8, v = s[key];
+    const h = v == null ? 0 : Math.max(2, Math.round((v / 100) * H));
+    return v == null
+      ? `<rect x="${x}" y="${top + H - 2}" width="${W - 16}" height="2" class="tc-empty"/><text x="${x + (W - 16) / 2}" y="${top + H - 8}" class="tc-v">—</text>`
+      : `<rect x="${x}" y="${top + H - h}" width="${W - 16}" height="${h}" rx="4" class="tc-bar${s[key + '_n'] < 3 ? ' tc-few' : ''}"/><text x="${x + (W - 16) / 2}" y="${top + H - h - 5}" class="tc-v">${Math.round(v)}</text>`;
+  }).join('');
+  const labels = series.map((s, i) => `<text x="${i * W + W / 2}" y="${top + H + 16}" class="tc-l">${esc(shortDate(s.start, L, bucket))}</text>`).join('');
+  const summary = series.map((s) => `${shortDate(s.start, L, bucket)}: ${s[key] == null ? '—' : s[key] + '%'} (n=${s[key + '_n']})`).join('; ');
+  return `<figure class="trend"><figcaption class="small muted">${esc(title)} · ${bucket === 'month' ? tx.insights.byMonth : tx.insights.byWeek}</figcaption>
+    <div class="trend-scroll"><svg viewBox="0 0 ${w} ${top + H + 24}" width="${w}" height="${top + H + 24}" role="img" aria-label="${esc(title)}: ${esc(summary)}">${bars}${labels}</svg></div>
+    <details class="small"><summary>${tx.insights.table}</summary><table class="ttable"><tr><th>${bucket === 'month' ? tx.insights.month : tx.insights.week}</th><th>%</th><th>n</th></tr>${series.map((s) => `<tr><td>${esc(shortDate(s.start, L, bucket))}</td><td>${s[key] == null ? '—' : s[key] + '%'}</td><td>${s[key + '_n']}</td></tr>`).join('')}</table></details></figure>`;
+}
+function habitTrend(tx, L, h, bucket) {
+  if (!h) return '';
+  const c = h.comparison;
+  const fmt = (d) => esc(new Intl.DateTimeFormat(L === 'en' ? 'en-US' : 'es-MX', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`)));
+  const pct = (v) => (v == null ? '—' : `${v}%`);
+  const val = (v) => (v == null ? '' : ` · ${tx.insights.avg} ${fmtNum(v)}${h.unit ? ' ' + esc(h.unit) : ''}`);
+  const cmp = !c.available ? `<p class="small muted">${tx.insights.baselineWait}</p>`
+    : `<div class="compare"><div><span class="small muted">${tx.insights.baseline} (${fmt(c.baseline.from)}–${fmt(c.baseline.to)})</span><strong>${pct(c.baseline.adherence)}</strong><span class="small muted">n = ${c.baseline.adherence_n}${val(c.baseline.value_avg)}</span></div>
+      <div><span class="small muted">${tx.insights.recent} (${fmt(c.recent.from)}–${fmt(c.recent.to)})</span><strong>${pct(c.recent.adherence)}</strong><span class="small muted">n = ${c.recent.adherence_n}${val(c.recent.value_avg)}</span></div>
+      <div><span class="small muted">${tx.insights.change}</span><strong>${c.adherence_diff == null ? '—' : (c.adherence_diff > 0 ? '+' : '') + fmtNum(c.adherence_diff) + ' ' + tx.insights.points}</strong></div></div>
+      ${c.baseline.few || c.recent.few ? `<p class="small muted">${tx.insights.fewData}</p>` : ''}`;
+  return trendChart(tx, L, h.series, bucket, tx.insights.adherenceTrend) + cmp;
 }
 
 // Obstáculos y ánimo: frecuencias descriptivas con su n; sin conclusiones causales.
@@ -317,12 +351,50 @@ function obstaclesSection(tx, L, o) {
     <p class="small muted">${tx.reflection.noCausal}</p>` : `<p class="muted">${tx.reflection.insightsEmpty}</p>`}`;
 }
 
+// ───────────── Plan y suscripción ─────────────
+const money = (cents, currency, L) => new Intl.NumberFormat(L === 'en' ? 'en-US' : 'es-MX', { style: 'currency', currency: currency.toUpperCase() }).format(cents / 100);
+const longDate = (iso, L) => (iso ? new Intl.DateTimeFormat(L === 'en' ? 'en-US' : 'es-MX', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso)) : '—');
+export function planPage(app, user, { csrf, status, checkout = null, error = null, flash = null }) {
+  const tx = t(user.locale);
+  const L = user.locale;
+  const p = tx.plan;
+  const sub = status.subscription;
+  const subActive = sub && ['active', 'trialing', 'past_due'].includes(sub.status) && status.pro;
+  const { pro_monthly: mo, pro_yearly: yr } = status.plans;
+  const save = Math.round((1 - yr.amount_cents / (mo.amount_cents * 12)) * 100);
+  const current = status.pro
+    ? `<div class="card"><h2 style="margin-top:0">${p.youArePro} ⭐</h2>
+        ${subActive ? `<p>${sub.cancel_at_period_end ? p.endsOn : p.renewsOn} <strong>${longDate(sub.current_period_end, L)}</strong>${sub.amount_cents ? ` · ${money(sub.amount_cents, sub.currency || mo.currency, L)} / ${sub.plan === 'pro_yearly' ? p.year : p.month}` : ''}</p>
+          ${sub.status === 'past_due' ? `<p class="notice">${p.pastDue}</p>` : ''}
+          <form method="post" action="${P(app, sub.cancel_at_period_end ? '/app/plan/reanudar' : '/app/plan/cancelar')}">${csrfField(csrf)}<button class="btn${sub.cancel_at_period_end ? ' btn--primary' : ''}">${sub.cancel_at_period_end ? p.resume : p.cancel}</button></form>
+          ${sub.cancel_at_period_end ? '' : `<p class="small muted">${p.cancelHelp}</p>`}`
+        : `<p class="muted">${status.pro_until ? `${p.until} ${longDate(status.pro_until, L)}` : p.granted}</p>`}</div>`
+    : `<div class="card"><h2 style="margin-top:0">${p.youAreFree}</h2><p class="muted" style="margin:0">${p.freeIncludes}</p></div>`;
+  const features = `<table class="ttable plan-table"><tr><th></th><th>Free</th><th>Pro</th></tr>${p.features.map(([f, a, b]) => `<tr><td>${f}</td><td>${a}</td><td><strong>${b}</strong></td></tr>`).join('')}</table>`;
+  const buy = status.pro ? '' : !status.available ? `<p class="notice">${p.soon}</p>`
+    : `<form method="post" action="${P(app, '/app/plan/checkout')}" class="form card">${csrfField(csrf)}
+      <fieldset class="field"><legend>${p.choose}</legend>
+        <label class="plan-opt"><input type="radio" name="plan" value="pro_yearly" checked><span><strong>${money(yr.amount_cents, yr.currency, L)} / ${p.year}</strong>${save > 0 ? ` <em class="state state--done">${p.save} ${save}%</em>` : ''}<br><span class="small muted">${p.yearlyEq} ${money(Math.round(yr.amount_cents / 12), yr.currency, L)} / ${p.month}</span></span></label>
+        <label class="plan-opt"><input type="radio" name="plan" value="pro_monthly"><span><strong>${money(mo.amount_cents, mo.currency, L)} / ${p.month}</strong></span></label>
+      </fieldset>
+      <label class="consent"><input type="checkbox" name="consent" value="1" required><span class="small">${p.consent}</span></label>
+      <button class="btn btn--primary btn--block">${p.continue}</button>
+      <p class="small muted" style="margin:0">🔒 ${p.secure}</p></form>`;
+  const notice = checkout === 'success' ? `<p class="notice" role="status">${status.pro ? p.activated : p.processing}</p>` : checkout === 'cancel' ? `<p class="notice" role="status">${p.checkoutCancelled}</p>` : '';
+  const body = `<h1>${p.title}</h1>${notice}${error ? `<p class="notice" role="alert">${esc(tx.errors[error] || tx.errors.generic)}</p>` : ''}
+  ${current}<h2>${p.compare}</h2>${features}${buy}
+  <p class="small muted" style="margin-top:16px">${p.keepData}</p>`;
+  return appShell(app, user, { title: p.title, path: '/app/settings', body, csrf, flash });
+}
+
 // ───────────── Cuenta ─────────────
 export function settingsPage(app, user, { csrf, pro, flash = null, error = null }) {
   const tx = t(user.locale);
-  const zones = Intl.supportedValuesOf?.('timeZone') || [user.timezone];
+  const listed = Intl.supportedValuesOf?.('timeZone') || [];
+  const zones = listed.includes(user.timezone) ? listed : [user.timezone, ...listed]; // p. ej. 'UTC' no viene en la lista y se perdería al guardar
   const body = `<h1>${tx.settings.title}</h1><p class="muted">${esc(user.email)} · ${tx.settings.plan}: <strong>${pro ? tx.settings.pro : tx.settings.free}</strong></p>
   ${pro ? '' : `<p class="small muted">${tx.settings.planNote}</p>`}
+  <p><a class="btn" href="${P(app, '/app/plan')}">${tx.plan.manage}</a></p>
   ${error ? `<p class="status error" role="alert">${esc(tx.errors[error] || tx.errors.generic)}</p>` : ''}
   <h2>${tx.settings.prefs}</h2><form class="form card" method="post" action="${P(app, '/app/settings')}">${csrfField(csrf)}
     <div class="grid2"><label class="field"><span>${tx.settings.language}</span><select class="input" name="locale"><option value="es"${user.locale === 'es' ? ' selected' : ''}>Español</option><option value="en"${user.locale === 'en' ? ' selected' : ''}>English</option></select></label>
@@ -330,6 +402,12 @@ export function settingsPage(app, user, { csrf, pro, flash = null, error = null 
       <label class="field"><span>${tx.settings.theme}</span><select class="input" name="theme">${Object.entries(tx.settings.themes).map(([k, l]) => `<option value="${k}"${user.theme === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="field"><span>${tx.settings.units}</span><select class="input" name="units">${Object.entries(tx.settings.unitsOpts).map(([k, l]) => `<option value="${k}"${user.units === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label></div>
     <button class="btn btn--primary">${tx.settings.save}</button></form>
+  <h2>${tx.reminders.title}</h2><form class="form card" method="post" action="${P(app, '/app/settings/recordatorios')}">${csrfField(csrf)}
+    <label class="row"><input type="checkbox" name="enabled" value="1"${user.reminders_email ? ' checked' : ''}${user.email_verified_at ? '' : ' disabled'}><span>${tx.reminders.enable}</span></label>
+    ${user.email_verified_at ? '' : `<p class="small muted" style="margin:0">${tx.reminders.verifyFirst}</p>`}
+    <label class="field"><span>${tx.reminders.digest} <span class="muted small">(${tx.common.optional})</span></span><input class="input" type="time" name="digest_time" value="${esc(user.reminder_digest_time || '')}"></label>
+    <p class="small muted" style="margin:0">${tx.reminders.help}</p>
+    <button class="btn">${tx.settings.save}</button></form>
   <h2>${tx.settings.security}</h2><form class="form card" method="post" action="${P(app, '/app/settings/password')}">${csrfField(csrf)}
     <div class="grid2"><label class="field"><span>${tx.settings.currentPassword}</span><input class="input" type="password" name="current" required autocomplete="current-password"></label>
       <label class="field"><span>${tx.settings.newPassword}</span><input class="input" type="password" name="next" minlength="10" required autocomplete="new-password"></label></div>

@@ -13,7 +13,9 @@ function fakeStorage() {
   const sql = {
     exec(q, ...p) {
       if (/^\s*(BEGIN|COMMIT|ROLLBACK|SAVEPOINT)/i.test(q)) throw new Error('Use transactionSync');
-      if (!p.length && q.split(';').filter((s) => s.trim() && !/^\s*--/.test(s.trim())).length > 1) { db.exec(q); return cursor([], 0); }
+      // Como en Durable Objects: varias sentencias sin parámetros se ejecutan todas (prepare solo tomaría la primera)
+      const code = q.replace(/--[^\n]*/g, '');
+      if (!p.length && code.split(';').filter((x) => x.trim()).length > 1) { db.exec(q); return cursor([], 0); }
       const st = db.prepare(q);
       if (/^\s*(SELECT|WITH|PRAGMA)|RETURNING/i.test(q)) return cursor(st.all(...p).map(toDo), 0);
       const r = st.run(...p);

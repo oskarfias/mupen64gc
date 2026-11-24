@@ -72,7 +72,7 @@ export function evaluate(goal, value) {
 
 export const goalAt = (app, habitId, date) =>
   app.db.get('SELECT * FROM habit_goal_versions WHERE habit_id = ? AND valid_from <= ? AND (valid_to IS NULL OR valid_to >= ?) ORDER BY valid_from DESC LIMIT 1', habitId, date, date);
-const scheduleAt = (app, habitId, date) =>
+export const scheduleAt = (app, habitId, date) =>
   app.db.get('SELECT * FROM habit_schedules WHERE habit_id = ? AND valid_from <= ? AND (valid_to IS NULL OR valid_to >= ?) ORDER BY valid_from DESC LIMIT 1', habitId, date, date);
 const pausedAt = (app, habitId, date) => Boolean(app.db.get('SELECT 1 FROM habit_pauses WHERE habit_id = ? AND from_date <= ? AND to_date >= ?', habitId, date, date));
 
@@ -340,6 +340,7 @@ export function exportData(app, userId) {
     pauses: q('SELECT * FROM habit_pauses WHERE owner_id = ?'),
     occurrences: q('SELECT * FROM habit_occurrences WHERE owner_id = ? ORDER BY local_date'),
     logs: q('SELECT id, occurrence_id, status, value, prev_status, prev_value, source, created_at FROM habit_logs WHERE owner_id = ? ORDER BY created_at'),
+    subscriptions: q('SELECT plan, status, current_period_end, cancel_at_period_end, amount_cents, currency, created_at, updated_at FROM subscriptions WHERE owner_id = ?'),
   };
 }
 

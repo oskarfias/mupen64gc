@@ -157,3 +157,23 @@ fieldset.card legend { padding: 0 4px; display: flex; gap: 8px; align-items: cen
 .bars .bar { height: 10px; background: var(--line); border-radius: 999px; overflow: hidden; }
 .bars .bar i { display: block; height: 100%; background: var(--accent); }
 .bars strong { text-align: right; }
+/* Tendencias */
+.trend { margin: 12px 0; }
+.trend-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.trend svg { display: block; max-width: none; }
+.tc-bar { fill: var(--accent); }
+.tc-few { fill: var(--accent); opacity: .45; }
+.tc-empty { fill: var(--line); }
+.tc-v { font-size: 11px; text-anchor: middle; fill: var(--text); font-weight: 600; }
+.tc-l { font-size: 10px; text-anchor: middle; fill: var(--muted); }
+.ttable { border-collapse: collapse; margin-top: 6px; }
+.ttable td, .ttable th { padding: 4px 10px 4px 0; text-align: left; }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 10px 0; }
+.compare > div { display: grid; gap: 2px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+/* Plan */
+.plan-opt { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
+.plan-opt input { margin-top: 4px; }
+.plan-opt:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.plan-table { width: 100%; margin: 8px 0 16px; }
+.plan-table td, .plan-table th { border-bottom: 1px solid var(--line); padding: 8px 6px 8px 0; vertical-align: top; }
+.consent { display: flex; gap: 10px; align-items: flex-start; } .consent input { margin-top: 4px; flex: none; width: 20px; height: 20px; } .consent span { flex: 1; }

@@ -4,13 +4,16 @@ import { join, dirname, extname, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.mjs';
 import { t } from './i18n.mjs';
-import { html, json, redirect, send, readForm, parseCookies, cookie, clientIp, limited, SECURITY_HEADERS } from '../photography/lib/http.mjs';
+import { html, json, redirect, send, readForm, readBody, parseCookies, cookie, clientIp, limited, SECURITY_HEADERS } from '../photography/lib/http.mjs';
 import { sign, safeEqual } from '../photography/lib/security.mjs';
 import { isDate, addDays, isTimeZone, localTime } from './lib/tz.mjs';
 import * as auth from './domain/auth.mjs';
 import * as H from './domain/habits.mjs';
 import * as onboarding from './domain/onboarding.mjs';
 import * as R from './domain/reflection.mjs';
+import * as T from './domain/trends.mjs';
+import * as Bl from './domain/billing.mjs';
+import * as Rm from './domain/reminders.mjs';
 import * as V from './views/pages.mjs';
 
 const here = (import.meta.url ? dirname(fileURLToPath(import.meta.url)) : '.'); // en Cloudflare no hay rutas de archivo
@@ -27,7 +30,10 @@ export function createHabitoos(options = {}) {
     if (req.url.includes('/api/')) return json(res, status, { error: e.code || 'generic' });
     return html(res, `<!doctype html><meta charset="utf-8"><p>${t('es').errors.generic}</p>`, { status });
   });
-  return { app, handle };
+  // Recordatorios: cada minuto en Node; en Cloudflare los dispara el Cron Trigger (runJobs).
+  const runJobs = () => Rm.runReminders(app).catch((e) => { console.error('[habitoos] recordatorios', e); return 0; });
+  if (options.worker !== false) setInterval(runJobs, 60_000).unref?.();
+  return { app, handle, runJobs };
 }
 
 const csrfFor = (user) => sign(`hos-csrf:${user.sessionId}`);
@@ -48,6 +54,13 @@ async function route(app, req, res) {
   if (path === '/manifest.webmanifest') return manifest(app, res);
   if (path === '/sw.js') return serviceWorker(app, res);
 
+  // Webhook de Stripe: firmado; sin sesión ni CSRF. Un error responde 500 para que Stripe reintente.
+  if (path === '/api/webhooks/stripe' && method === 'POST') {
+    const raw = (await readBody(req, 1_000_000)).toString('utf8');
+    const ev = app.billing.verifyWebhook(raw, req.headers['stripe-signature']);
+    if (!ev) return json(res, 400, { error: 'invalid_signature' });
+    return json(res, 200, { result: await Bl.handleEvent(app, ev) });
+  }
   if (method === 'POST' && !sameOrigin(req)) return json(res, 403, { error: 'origin' });
 
   const user = auth.sessionUser(app, parseCookies(req)[COOKIE]);
@@ -127,6 +140,10 @@ async function route(app, req, res) {
         return html(res, V.resetPage(app, lang, f.t, { error: e.code }), { status: 400, noindex: true });
       }
     }
+  }
+  if (path === '/recordatorios/baja' && method === 'GET') {
+    const ok = Rm.unsubscribe(app, url.searchParams.get('u'), url.searchParams.get('s'));
+    return html(res, V.messagePage(app, lang, ok ? tx.reminders.unsubscribed : tx.auth.invalidLink, ok ? tx.reminders.unsubscribedHelp : '', [`${app.base}/app/settings`, tx.nav.settings]), { noindex: true, headers: { 'Referrer-Policy': 'no-referrer' } });
   }
   if (path === '/verificar' && method === 'GET') {
     const ok = auth.verifyEmail(app, url.searchParams.get('t'));
@@ -228,7 +245,20 @@ async function route(app, req, res) {
     if (clamped) range = H.FREE_HISTORY_DAYS;
     const td = H.today(app, user);
     const from = addDays(td, -(range - 1));
-    return page(V.insightsPage(app, user, H.metrics(app, user, from, td), { csrf, range, pro, clamped, obstacles: R.obstacleStats(app, user, from, td) }));
+    const bucket = range >= 180 ? 'month' : 'week';
+    const trends = T.trends(app, user, from, td, { bucket, minDate: pro ? null : addDays(td, -(H.FREE_HISTORY_DAYS - 1)) });
+    return page(V.insightsPage(app, user, H.metrics(app, user, from, td), { csrf, range, pro, clamped, obstacles: R.obstacleStats(app, user, from, td), trends }));
+  }
+  if (path === '/app/plan' && method === 'GET') return page(V.planPage(app, user, { csrf, status: Bl.billingStatus(app, user), checkout: url.searchParams.get('checkout'), flash }));
+  if ((m = path.match(/^\/app\/plan\/(checkout|cancelar|reanudar)$/)) && method === 'POST') {
+    try {
+      if (m[1] === 'checkout') { const { url: to } = await Bl.startCheckout(app, user, form.plan, { consent: form.consent, lang: user.locale }); return redirect(res, to, 303); }
+      if (m[1] === 'cancelar') { await Bl.cancelAtPeriodEnd(app, user); return back('/app/plan', tx.plan.cancelled); }
+      if (m[1] === 'reanudar') { await Bl.resume(app, user); return back('/app/plan', tx.plan.resumed); }
+    } catch (e) {
+      if (!e.code) throw e;
+      return html(res, V.planPage(app, user, { csrf, status: Bl.billingStatus(app, user), error: e.code }), { status: e.status || 400, noindex: true });
+    }
   }
   if (path === '/app/settings' && method === 'GET') return page(V.settingsPage(app, user, { csrf, pro: H.isPro(app, user.id), flash }));
   if (path === '/app/settings' && method === 'POST') {
@@ -237,6 +267,10 @@ async function route(app, req, res) {
     app.db.run('UPDATE profiles SET locale = ?, timezone = ?, theme = ?, units = ?, updated_at = ? WHERE user_id = ?', locale, tz,
       ['system', 'light', 'dark'].includes(form.theme) ? form.theme : 'system', form.units === 'imperial' ? 'imperial' : 'metric', app.iso(), user.id);
     return back('/app/settings', t(locale).settings.saved);
+  }
+  if (path === '/app/settings/recordatorios' && method === 'POST') {
+    try { Rm.setPreferences(app, user, { enabled: form.enabled, digestTime: form.digest_time }); return back('/app/settings', tx.settings.saved); }
+    catch (e) { if (!e.code) throw e; return html(res, V.settingsPage(app, user, { csrf, pro: H.isPro(app, user.id), error: e.code }), { status: 400, noindex: true }); }
   }
   if (path === '/app/settings/password' && method === 'POST') {
     try { auth.changePassword(app, user.id, form.current, form.next, user.sessionId); return back('/app/settings', tx.settings.saved); }
@@ -315,6 +349,22 @@ async function api(app, req, res, p, url, user, ip) {
     if (method === 'DELETE') return json(res, 200, R.deleteReview(app, user, m[1]));
   }
   if ((m = p.match(/^\/reviews\/(\d{4}-\d{2}-\d{2})\/dismiss$/)) && method === 'POST') return json(res, 200, R.dismissReview(app, user, m[1]));
+  if (p === '/reminders' && method === 'PUT') { Rm.setPreferences(app, user, { enabled: body.enabled, digestTime: body.digest_time }); return json(res, 200, { ok: true }); }
+  if (p === '/billing' && method === 'GET') return json(res, 200, Bl.billingStatus(app, user));
+  if (p === '/billing/checkout' && method === 'POST') return json(res, 200, await Bl.startCheckout(app, user, body.plan, { consent: body.consent, lang: user.locale }));
+  if (p === '/billing/cancel' && method === 'POST') return json(res, 200, await Bl.cancelAtPeriodEnd(app, user));
+  if (p === '/billing/resume' && method === 'POST') return json(res, 200, await Bl.resume(app, user));
+  if (p === '/analytics/trends' && method === 'GET') {
+    const td = H.today(app, user);
+    const pro = H.isPro(app, user.id);
+    let from = isDate(url.searchParams.get('from')) ? url.searchParams.get('from') : addDays(td, -89);
+    const to = isDate(url.searchParams.get('to')) && url.searchParams.get('to') <= td ? url.searchParams.get('to') : td;
+    const minFree = addDays(td, -(H.FREE_HISTORY_DAYS - 1));
+    const clamped = !pro && from < minFree;
+    if (clamped) from = minFree;
+    const bucket = url.searchParams.get('bucket') === 'month' ? 'month' : 'week';
+    return json(res, 200, { ...T.trends(app, user, from, to, { bucket, minDate: pro ? null : minFree }), history_limited: clamped });
+  }
   if (p === '/analytics/obstacles' && method === 'GET') {
     const td = H.today(app, user);
     let from = isDate(url.searchParams.get('from')) ? url.searchParams.get('from') : addDays(td, -29);
