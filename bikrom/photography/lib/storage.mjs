@@ -1,5 +1,6 @@
 // Almacenamiento privado de archivos.
 // - local: disco del servidor (demostración o servidor con disco persistente).
+// - sqlite: dentro de la misma base de datos, en bloques de 1 MB (Cloudflare Durable Objects, sin disco).
 // - s3: compatible con S3 (Cloudflare R2, Backblaze B2, AWS). Firma SigV4 sin dependencias.
 // Los archivos nunca son públicos: se entregan a través del servidor o con URL firmadas de corta vida.
 import { createReadStream, createWriteStream, mkdirSync, statSync, existsSync, rmSync, openSync, writeSync, closeSync, renameSync } from 'node:fs';
@@ -9,9 +10,88 @@ import { Readable } from 'node:stream';
 
 export const PART_SIZE = 8 * 1024 * 1024; // 8 MB (S3 exige ≥ 5 MB salvo la última parte)
 
-export function createStorage(env, dataDir) {
+export function createStorage(env, dataDir, db) {
   if (env.STORAGE_DRIVER === 's3') return s3Storage(env);
+  if (env.STORAGE_DRIVER === 'sqlite') return sqliteStorage(db);
   return localStorage(join(dataDir, 'files'));
+}
+
+// ───────────── SQLite (bloques) ─────────────
+// Pensado para Cloudflare Durable Objects (límite de 2 MB por valor): cada archivo se guarda en bloques de 1 MB.
+export const CHUNK = 1024 * 1024;
+export function sqliteStorage(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS file_blobs (key TEXT PRIMARY KEY, size INTEGER NOT NULL, complete INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS file_chunks (key TEXT NOT NULL, n INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (key, n));`);
+  const partKey = (key) => key + '.part';
+  const drop = (key) => db.tx(() => {
+    db.run('DELETE FROM file_chunks WHERE key = ?', key);
+    db.run('DELETE FROM file_blobs WHERE key = ?', key);
+  });
+  const writeAt = (key, offset, buf) => db.tx(() => {
+    for (let i = 0; i < buf.length; i += CHUNK) {
+      if ((offset + i) % CHUNK) throw new Error('bloque desalineado');
+      db.run('INSERT OR REPLACE INTO file_chunks (key, n, data) VALUES (?, ?, ?)', key, (offset + i) / CHUNK, buf.subarray(i, i + CHUNK));
+    }
+    const end = offset + buf.length;
+    db.run('INSERT INTO file_blobs (key, size, complete, updated_at) VALUES (?, ?, 0, ?) ON CONFLICT(key) DO UPDATE SET size = MAX(size, excluded.size), updated_at = excluded.updated_at', key, end, Date.now());
+  });
+  const toBuf = (v) => (Buffer.isBuffer(v) ? v : Buffer.from(v instanceof ArrayBuffer ? new Uint8Array(v) : v));
+  return {
+    driver: 'sqlite',
+    async createUpload(key) {
+      drop(partKey(key));
+      db.run('INSERT INTO file_blobs (key, size, complete, updated_at) VALUES (?, 0, 0, ?)', partKey(key), Date.now());
+      return { providerUploadId: null };
+    },
+    async putPart(upload, index, buf) {
+      writeAt(partKey(upload.storage_key), index * PART_SIZE, buf);
+      return { n: index + 1 };
+    },
+    async completeUpload(upload) {
+      const key = upload.storage_key;
+      db.tx(() => {
+        db.run('DELETE FROM file_chunks WHERE key = ?', key);
+        db.run('DELETE FROM file_blobs WHERE key = ?', key);
+        db.run('UPDATE file_chunks SET key = ? WHERE key = ?', key, partKey(key));
+        db.run('UPDATE file_blobs SET key = ?, complete = 1, updated_at = ? WHERE key = ?', key, Date.now(), partKey(key));
+      });
+    },
+    async abortUpload(upload) {
+      drop(partKey(upload.storage_key));
+    },
+    async putObject(key, buf) {
+      db.tx(() => {
+        drop(key);
+        writeAt(key, 0, Buffer.from(buf));
+        db.run('UPDATE file_blobs SET complete = 1 WHERE key = ?', key);
+      });
+    },
+    async size(key) {
+      return db.get('SELECT size FROM file_blobs WHERE key = ? AND complete = 1', key)?.size ?? null;
+    },
+    async stream(key, range) {
+      const size = await this.size(key);
+      if (size == null) return null;
+      const start = range ? range.start : 0;
+      const end = range ? Math.min(range.end, size - 1) : size - 1;
+      async function* chunks() {
+        for (let n = Math.floor(start / CHUNK); n * CHUNK <= end; n++) {
+          const row = db.get('SELECT data FROM file_chunks WHERE key = ? AND n = ?', key, n);
+          if (!row) throw new Error('bloque faltante');
+          const buf = toBuf(row.data);
+          const from = Math.max(0, start - n * CHUNK);
+          const to = Math.min(buf.length, end - n * CHUNK + 1);
+          yield buf.subarray(from, to);
+        }
+      }
+      return { body: Readable.from(chunks()), size };
+    },
+    signedUrl: () => null,
+    async remove(key) {
+      drop(key);
+      drop(partKey(key));
+    },
+  };
 }
 
 // ───────────── Local ─────────────

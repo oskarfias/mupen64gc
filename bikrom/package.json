@@ -15,6 +15,12 @@
     "photo": "node --disable-warning=ExperimentalWarning photography/server.mjs",
     "photo:test": "node --disable-warning=ExperimentalWarning photography/tests/run.mjs",
     "habitoos:test": "node --disable-warning=ExperimentalWarning habitoos/tests/run.mjs",
-    "test": "npm run -s check && npm run -s photo:test && npm run -s habitoos:test"
+    "test": "npm run -s check && npm run -s photo:test && npm run -s habitoos:test && npm run -s cf:test",
+    "cf:test": "node build.mjs >/dev/null && CF_SHIM=1 node --disable-warning=ExperimentalWarning photography/tests/run.mjs && CF_SHIM=1 node --disable-warning=ExperimentalWarning habitoos/tests/run.mjs",
+    "cf:dev": "node build.mjs && npx wrangler dev",
+    "cf:deploy": "node build.mjs && npx wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.167.0"
   }
 }

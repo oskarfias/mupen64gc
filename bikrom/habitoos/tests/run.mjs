@@ -11,7 +11,9 @@ import { addDays } from '../lib/tz.mjs';
 const dir = mkdtempSync(join(tmpdir(), 'hos-test-'));
 let clock = Date.parse('2026-12-01T18:00:00Z'); // 12:00 en Ciudad de México
 const env = { NODE_ENV: 'test', APP_SECRET: 'y'.repeat(40), SITE_URL: 'http://localhost' };
-const { app, handle } = createHabitoos({ env, dataDir: dir, now: () => clock });
+// CF_SHIM=1: misma prueba sobre la capa de Cloudflare (base del Durable Object)
+const cf = process.env.CF_SHIM ? (await import('../../cloudflare/test-shim.mjs')).shim('habitoos') : {};
+const { app, handle } = createHabitoos({ env, dataDir: dir, now: () => clock, ...cf });
 const server = createServer(handle).listen(0);
 const B = `http://localhost:${server.address().port}/habitoos`;
 

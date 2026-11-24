@@ -1,5 +1,5 @@
 // Generador estático de Bikrom. Sin dependencias: `node build.mjs` → dist/
-import { mkdirSync, writeFileSync, rmSync, cpSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, cpSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -77,5 +77,24 @@ const today = new Date().toISOString().slice(0, 10);
 const urls = pages.filter((p) => p.sitemap).map((p) => `  <url><loc>${config.siteUrl}${p.path}</loc><lastmod>${today}</lastmod></url>`);
 writeFileSync(join(dist, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`);
 writeFileSync(join(dist, 'robots.txt'), config.preview ? 'User-agent: *\nDisallow: /\n' : `User-agent: *\nDisallow: /carrito/\nDisallow: /gracias/\nDisallow: /admin\nDisallow: /api/\nSitemap: ${config.siteUrl}/sitemap.xml\n`);
+
+// Recursos de Fotografía y HabitoOS como archivos estáticos (Cloudflare los sirve sin pasar por el servidor)
+cpSync(join(root, 'photography', 'public'), join(dist, 'photography', 'static'), { recursive: true });
+cpSync(join(root, 'habitoos', 'public'), join(dist, 'habitoos', 'static'), { recursive: true });
+writeFileSync(join(dist, '_headers'), `/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+/assets/*
+  Cache-Control: public, max-age=86400
+/photography/static/*
+  Cache-Control: public, max-age=31536000, immutable
+/habitoos/static/*
+  Cache-Control: public, max-age=31536000, immutable
+`);
+
+// Cloudflare: migraciones SQL empaquetadas en el Worker (no hay sistema de archivos en producción)
+const sqlFiles = (dir) => readdirSync(join(root, dir)).filter((f) => f.endsWith('.sql')).sort().map((name) => ({ name, sql: readFileSync(join(root, dir, name), 'utf8') }));
+writeFileSync(join(root, 'cloudflare', 'generated.mjs'), `// Generado por build.mjs. No editar.\nexport const migrations = ${JSON.stringify({ photography: sqlFiles('photography/migrations'), habitoos: sqlFiles('habitoos/migrations') })};\n`);
 
 console.log(`Bikrom: ${pages.length + 1} páginas generadas en dist/ (${products.length} productos en catálogo)${config.preview ? ' · VISTA PREVIA' : ''}.`);

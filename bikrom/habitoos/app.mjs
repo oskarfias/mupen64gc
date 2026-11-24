@@ -5,12 +5,12 @@ import { randomUUID } from 'node:crypto';
 import { openDb } from '../photography/db.mjs';
 import { mailAdapter } from '../photography/lib/providers.mjs';
 
-const here = dirname(fileURLToPath(import.meta.url));
+const here = (import.meta.url ? dirname(fileURLToPath(import.meta.url)) : '.'); // en Cloudflare no hay rutas de archivo
 export const BASE = '/habitoos';
 
-export function createApp({ env = process.env, dataDir, dbFile, now } = {}) {
+export function createApp({ env = process.env, dataDir, dbFile, now, db: givenDb } = {}) {
   const dir = dataDir || env.HABITOOS_DATA_DIR || join(env.DATA_DIR || join(process.cwd(), 'data'), 'habitoos');
-  const db = openDb(dbFile || join(dir, 'habitoos.db'), join(here, 'migrations'));
+  const db = givenDb || openDb(dbFile || join(dir, 'habitoos.db'), join(here, 'migrations'));
   const app = {
     env,
     db,

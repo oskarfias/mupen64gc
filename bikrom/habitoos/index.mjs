@@ -12,7 +12,7 @@ import * as H from './domain/habits.mjs';
 import * as onboarding from './domain/onboarding.mjs';
 import * as V from './views/pages.mjs';
 
-const here = dirname(fileURLToPath(import.meta.url));
+const here = (import.meta.url ? dirname(fileURLToPath(import.meta.url)) : '.'); // en Cloudflare no hay rutas de archivo
 const STATIC = join(here, 'public');
 const TYPES = { '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png' };
 const COOKIE = 'hos_s';

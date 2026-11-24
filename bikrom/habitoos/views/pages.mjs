@@ -5,7 +5,7 @@ import { formatLongDate, addDays } from '../lib/tz.mjs';
 import { json } from '../../photography/db.mjs';
 
 export const esc = (s = '') => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-const V = (process.env.RENDER_GIT_COMMIT || String(Date.now())).slice(0, 8);
+const V = (process.env.ASSET_VERSION || process.env.RENDER_GIT_COMMIT || process.env.WORKERS_CI_COMMIT_SHA || String(Date.now())).slice(0, 8);
 const asset = (app, f) => `${app.base}/static/${f}?v=${V}`;
 const P = (app, p = '') => `${app.base}${p}`;
 

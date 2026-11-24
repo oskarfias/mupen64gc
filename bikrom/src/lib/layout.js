@@ -5,7 +5,7 @@ import { logo } from './logo.js';
 import { icon } from './icons.js';
 
 // Versión de los archivos CSS/JS: cambia en cada despliegue para que nadie vea estilos viejos en caché.
-const V = (process.env.RENDER_GIT_COMMIT || Date.now().toString(36)).slice(0, 8);
+const V = (process.env.ASSET_VERSION || process.env.RENDER_GIT_COMMIT || process.env.WORKERS_CI_COMMIT_SHA || Date.now().toString(36)).slice(0, 8);
 const asset = (src) => `${src}?v=${V}`;
 
 const nav = [

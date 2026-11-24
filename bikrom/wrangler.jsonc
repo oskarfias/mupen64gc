@@ -1,0 +1,31 @@
+// Bikrom en Cloudflare Workers (plan gratis). Ver cloudflare/README.md.
+// Secretos (contraseñas y claves) se agregan en Cloudflare → Workers → bikrom → Settings → Variables and Secrets.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bikrom",
+  "main": "cloudflare/worker.mjs",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "BIKROM", "class_name": "Bikrom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Bikrom"] }],
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "keep_vars": true,
+  "vars": {
+    "SITE_URL": "https://bikrom.com",
+    "PREVIEW": "true",
+    "NODE_ENV": "production",
+    "STORAGE_DRIVER": "sqlite",
+    "ADMIN_USER": "admin",
+    "EMAIL_FROM": "Bikrom <hola@bikrom.com>"
+  },
+  "observability": { "enabled": true }
+}

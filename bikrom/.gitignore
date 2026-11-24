@@ -5,3 +5,8 @@ private/descargas/*
 !private/descargas/LEEME.md
 data/photography/
 photography/.env
+cloudflare/generated.mjs
+.wrangler/
+node_modules/
+data/habitoos/
+.dev.vars

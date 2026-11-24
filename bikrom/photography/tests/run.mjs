@@ -24,7 +24,10 @@ const env = {
   STRIPE_SECRET_KEY: 'sk_test_local', STRIPE_WEBHOOK_SECRET: 'whsec_local', PAYPAL_CLIENT_ID: 'id', PAYPAL_CLIENT_SECRET: 'secret',
   GOOGLE_CLIENT_ID: 'gid', GOOGLE_CLIENT_SECRET: 'gsecret', SITE_URL: 'http://localhost',
 };
-const { app, handle, runJobs } = createPhotography({ env, dataDir: dir, now: () => clock, worker: false });
+// CF_SHIM=1: misma prueba sobre la capa de Cloudflare (base del Durable Object y archivos en SQLite)
+const cf = process.env.CF_SHIM ? (await import('../../cloudflare/test-shim.mjs')).shim('photography') : {};
+if (process.env.CF_SHIM) env.STORAGE_DRIVER = 'sqlite';
+const { app, handle, runJobs } = createPhotography({ env, dataDir: dir, now: () => clock, worker: false, ...cf });
 
 // Adaptadores de prueba (sin red)
 let ref = 0;

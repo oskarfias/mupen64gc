@@ -7,15 +7,15 @@ import { stripeAdapter, paypalAdapter, googleAdapter, mailAdapter } from './lib/
 
 export const BASE = '/photography';
 
-export function createApp({ env = process.env, dataDir, dbFile, now } = {}) {
+export function createApp({ env = process.env, dataDir, dbFile, now, db: givenDb, storage } = {}) {
   const dir = dataDir || env.PHOTO_DATA_DIR || join(env.DATA_DIR || join(process.cwd(), 'data'), 'photography');
-  const db = openDb(dbFile || join(dir, 'photography.db'));
+  const db = givenDb || openDb(dbFile || join(dir, 'photography.db'));
   seed(db);
   const app = {
     env,
     db,
     dataDir: dir,
-    storage: createStorage(env, dir),
+    storage: storage || createStorage(env, dir, db),
     stripe: stripeAdapter(env),
     paypal: paypalAdapter(env),
     google: googleAdapter(env),

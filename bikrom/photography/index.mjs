@@ -21,7 +21,7 @@ import { runDue, startWorker, schedule } from './domain/jobs.mjs';
 import { handlers } from './domain/handlers.mjs';
 import { adminRoutes, isAdminRequest } from './views/admin/routes.mjs';
 
-const here = dirname(fileURLToPath(import.meta.url));
+const here = (import.meta.url ? dirname(fileURLToPath(import.meta.url)) : '.'); // en Cloudflare no hay rutas de archivo
 const STATIC = join(here, 'public');
 const TYPES = { '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.mp4': 'video/mp4', '.mov': 'video/quicktime' };
 
@@ -38,7 +38,11 @@ export function createPhotography(options = {}) {
       else html(res, `<p>${t('es').common.error}</p>`, { status: e.status || 500 });
     }
   });
-  return { app, handle, runJobs: () => runDue(app, handlers) };
+  const runJobs = () => {
+    schedule(app, 'sweep', app.now(), {}, `sweep:${Math.floor(app.now() / 900_000)}`);
+    return runDue(app, handlers);
+  };
+  return { app, handle, runJobs };
 }
 
 const langOf = (path) => (path === '/en' || path.startsWith('/en/') ? 'en' : 'es');

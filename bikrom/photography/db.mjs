@@ -1,13 +1,13 @@
 // Base de datos SQLite (módulo integrado node:sqlite). Un archivo persistente en DATA_DIR.
-import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const here = dirname(fileURLToPath(import.meta.url));
+const here = (import.meta.url ? dirname(fileURLToPath(import.meta.url)) : '.'); // en Cloudflare no hay rutas de archivo
 
 export function openDb(file, migrationsDir = join(here, 'migrations')) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
+  const { DatabaseSync } = process.getBuiltinModule('node:sqlite'); // carga perezosa: este módulo también se usa en Cloudflare
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   migrate(db, migrationsDir);

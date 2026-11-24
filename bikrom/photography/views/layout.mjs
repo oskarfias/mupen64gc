@@ -4,7 +4,7 @@ import { t } from '../i18n.mjs';
 
 export const P = (app, lang, path = '/') => `${app.base}${lang === 'en' ? '/en' : ''}${path}`;
 export const asset = (app, file) => `${app.base}/static/${file}?v=${ASSET_VERSION}`;
-export const ASSET_VERSION = (process.env.RENDER_GIT_COMMIT || String(Date.now())).slice(0, 8);
+export const ASSET_VERSION = (process.env.ASSET_VERSION || process.env.RENDER_GIT_COMMIT || process.env.WORKERS_CI_COMMIT_SHA || String(Date.now())).slice(0, 8);
 
 export function media(app, slot) {
   return app.db.get('SELECT * FROM media WHERE slot = ? ORDER BY id LIMIT 1', slot);
