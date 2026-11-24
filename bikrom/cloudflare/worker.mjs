@@ -8,6 +8,7 @@ import { migrations } from './generated.mjs';
 import { runNode } from './node-http.mjs';
 import { sqlDb } from './sqlite.mjs';
 import { sqlStore } from './store.mjs';
+import { r2Storage } from './r2.mjs';
 
 const DYNAMIC = /^\/(api\/|admin(\/|$)|descargas\/)/;
 const inApp = (p, base) => (p === base || p.startsWith(base + '/')) && !p.startsWith(base + '/static/');
@@ -58,6 +59,7 @@ function ensureSecret(sql, key) {
 
 async function boot(ctx, env) {
   for (const [k, v] of Object.entries(env)) if (typeof v === 'string') process.env[k] = v;
+  if (env.PHOTOS) process.env.STORAGE_DRIVER = 'r2'; // fotos en R2 si el bucket está enlazado
   process.env.STORAGE_DRIVER ||= 'sqlite';
   ensureSecret(ctx.storage.sql, 'APP_SECRET');
   // Se importan aquí (no arriba) para que lean process.env ya completo.
@@ -67,7 +69,7 @@ async function boot(ctx, env) {
     import('../habitoos/index.mjs'),
   ]);
   const penv = process.env;
-  const photography = createPhotography({ env: penv, worker: false, db: sqlDb(ctx.storage, { namespace: 'photography', migrations: migrations.photography }) });
+  const photography = createPhotography({ env: penv, worker: false, ...(env.PHOTOS ? { storage: r2Storage(env.PHOTOS) } : {}), db: sqlDb(ctx.storage, { namespace: 'photography', migrations: migrations.photography }) });
   const habitoos = createHabitoos({ env: penv, db: sqlDb(ctx.storage, { namespace: 'habitoos', migrations: migrations.habitoos }) });
   const store = sqlStore(sqlDb(ctx.storage, { namespace: 'site' }));
   const files = {
