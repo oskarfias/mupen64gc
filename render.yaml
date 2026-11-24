@@ -4,11 +4,15 @@ services:
     name: bikrom
     runtime: node
     rootDir: bikrom
-    plan: free               # gratis: sin disco, los datos se reinician en cada despliegue o reinicio
+    plan: starter            # con disco persistente: base de datos, galerías y archivos
     buildCommand: npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true
+    disk:                    # se puede ampliar después, no reducir
+      name: bikrom-data
+      mountPath: /var/data
+      sizeGB: 20
     domains:
       - bikrom.com
       - www.bikrom.com
@@ -19,6 +23,8 @@ services:
         value: https://bikrom.com
       - key: PREVIEW          # cambia a "false" para lanzar (activa pagos e indexación)
         value: "true"
+      - key: DATA_DIR
+        value: /var/data
       - key: ADMIN_USER
         value: admin
       - key: ADMIN_PASSWORD
