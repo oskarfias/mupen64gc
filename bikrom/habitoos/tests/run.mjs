@@ -406,6 +406,64 @@ await test('Recordatorios: opt-in, hora local, sin duplicados, nada si ya se reg
   } finally { app.mail = realMail; }
 });
 
+await test('Alimentación por equivalentes: emojis por grupo, porciones, fuera del plan, deshacer y versiones', async () => {
+  clock = Date.parse('2027-06-07T18:00:00Z');
+  const U = await client('comidas@ejemplo.mx');
+  const intro = await (await fetch(`${B}/app/alimentacion`, { headers: { cookie: U.cookie } })).text();
+  assert(['🍳', '🥛', '🥬', '🍎', '🫘', '🥑', '🍞'].every((e) => intro.includes(e)), 'los 7 grupos con emoji por defecto');
+  const gs = (await U.call('GET', '/nutrition/plan')).body.groups;
+  const G = Object.fromEntries(gs.map((g) => [g.key, g.id]));
+  // Plan por formulario (como en el celular)
+  const fb = new URLSearchParams({ _csrf: U.csrf, m0_slot: 'breakfast', m0_name: 'Desayuno', m0_time: '08:00', [`t0_${G.protein}`]: '2', [`t0_${G.cereals}`]: '1', [`t0_${G.fruit}`]: '1',
+    m1_slot: 'lunch', m1_name: 'Comida', m1_time: '14:30', [`t1_${G.protein}`]: '2', [`t1_${G.vegetables}`]: '2', [`t1_${G.cereals}`]: '1.5', [`t1_${G.fats}`]: '1', m2_slot: '', m2_name: '', notes: 'Equivalentes SMAE' });
+  eq((await fetch(`${B}/app/alimentacion/plan`, { method: 'POST', redirect: 'manual', headers: { cookie: U.cookie, 'Content-Type': 'application/x-www-form-urlencoded' }, body: fb })).status, 303, 'plan guardado');
+  const d = U.me.today;
+  let day = (await U.call('GET', `/nutrition/day/${d}`)).body;
+  eq(day.meals.length, 2, 'dos comidas'); eq(day.summary.planned, 10.5, 'porciones planeadas (con media porción)');
+  assert(!/kcal|calor/i.test(JSON.stringify(day)), 'sin calorías: los emojis no equivalen a calorías');
+  const add = (body) => U.call('POST', `/nutrition/day/${d}/add`, body);
+  await add({ meal_slot: 'breakfast', group_id: G.protein, requestId: 'r1' });
+  await add({ meal_slot: 'breakfast', group_id: G.protein, requestId: 'r1' });
+  day = (await U.call('GET', `/nutrition/day/${d}`)).body;
+  eq(day.meals[0].items.find((i) => i.group_id === G.protein).done, 1, 'reintento con el mismo requestId no duplica');
+  await add({ meal_slot: 'breakfast', group_id: G.protein, requestId: 'r2' });
+  day = (await add({ meal_slot: 'breakfast', group_id: G.protein, requestId: 'r3' })).body;
+  eq(day.summary.covered, 2, 'dos porciones del plan'); eq(day.extra[G.protein], 1, 'la porción de más cuenta como fuera del plan');
+  day = (await U.call('POST', `/nutrition/day/${d}/remove`, { meal_slot: 'breakfast', group_id: G.protein })).body;
+  eq(day.extra[G.protein] || 0, 0, 'deshacer quita la última');
+  day = (await add({ meal_slot: 'lunch', group_id: G.cereals, portions: 0.5, requestId: 'r4' })).body;
+  eq(day.meals[1].items.find((i) => i.group_id === G.cereals).done, 0.5, 'media porción');
+  day = (await add({ meal_slot: null, group_id: G.cereals, requestId: 'r5' })).body;
+  eq(day.extra[G.cereals], 1, 'consumo fuera del plan'); eq(day.summary.covered, 2.5, 'fuera del plan no suma al cumplimiento');
+  eq(day.summary.adherence, Math.round((2.5 / 10.5) * 1000) / 10, '% del plan cubierto');
+  await U.call('POST', '/habits', habit('build', 'binary', { comparator: 'done' }, { name: 'Agua' })); // Hoy requiere al menos un hábito
+  assert((await (await fetch(`${B}/app/today`, { headers: { cookie: U.cookie } })).text()).includes('2.5 de 10.5 porciones del plan'), 'Hoy muestra el resumen');
+  eq((await add({ group_id: G.fruit, requestId: 'r6x', meal_slot: 'breakfast', portions: 1 }).then(() => U.call('POST', `/nutrition/day/${addDays(d, 1)}/add`, { group_id: G.fruit }))).status, 400, 'no se registran días futuros');
+  // Aislamiento
+  const W = await client('otro-comidas@ejemplo.mx');
+  eq((await W.call('POST', `/nutrition/day/${d}/add`, { group_id: G.protein })).status, 404, 'no se usan grupos ajenos');
+  eq((await W.call('GET', `/nutrition/day/${d}`)).body.has_plan, false, 'cada quien ve solo su plan');
+  // Grupos configurables
+  const gsave = new URLSearchParams({ _csrf: U.csrf, [`g_${G.legumes}_name`]: 'Leguminosas', [`g_${G.legumes}_emoji`]: '🫘', [`g_${G.legumes}_archived`]: '1', new_name: 'Bebidas', new_emoji: '🥤' });
+  for (const g of gs.filter((x) => x.key !== 'legumes')) { gsave.set(`g_${g.id}_name`, g.name); gsave.set(`g_${g.id}_emoji`, g.emoji); }
+  await fetch(`${B}/app/alimentacion/grupos`, { method: 'POST', redirect: 'manual', headers: { cookie: U.cookie, 'Content-Type': 'application/x-www-form-urlencoded' }, body: gsave });
+  const g2 = (await U.call('GET', '/nutrition/plan')).body.groups;
+  assert(g2.some((g) => g.emoji === '🥤') && !g2.some((g) => g.key === 'legumes'), 'grupo nuevo y grupo oculto');
+  // Versiones: cambiar el plan mañana no cambia el plan de hoy
+  clock += 864e5;
+  const d2 = addDays(d, 1);
+  await U.call('PUT', '/nutrition/plan', { meals: [{ slot: 'breakfast', name: 'Desayuno', time: '08:00', targets: { [G.protein]: 1 } }] });
+  eq((await U.call('GET', `/nutrition/day/${d2}`)).body.summary.planned, 1, 'plan nuevo desde hoy');
+  const old = (await U.call('GET', `/nutrition/day/${d}`)).body;
+  eq(old.summary.planned, 10.5, 'el día anterior conserva su plan'); eq(old.summary.covered, 3.5, 'y sus registros (incluida la fruta del desayuno)');
+  const hist = (await U.call('GET', '/nutrition/history')).body;
+  eq(hist.days.length, 2, 'historial por día');
+  const ex = await (await fetch(`${B}/api/v1/export`, { headers: { cookie: U.cookie } })).json();
+  assert(ex.nutrition.logs.length >= 5 && ex.nutrition.plan_versions[0].notes === 'Equivalentes SMAE', 'exportación incluye plan, notas y registros');
+  const raw = app.db.get('SELECT notes_enc FROM nutrition_plan_versions WHERE owner_id = ? ORDER BY valid_from LIMIT 1', U.me.id).notes_enc;
+  assert(raw && !raw.includes('SMAE'), 'indicaciones cifradas');
+});
+
 await test('Identidad: contraseña incorrecta, recuperación y sesiones revocadas', async () => {
   const bad = await fetch(`${B}/entrar`, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ email: 'ana@ejemplo.mx', password: 'mal' }) });
   eq(bad.status, 401, 'rechazada');

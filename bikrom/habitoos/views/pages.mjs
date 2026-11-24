@@ -97,7 +97,7 @@ export function resetPage(app, lang, token, { error = null } = {}) {
 // ───────────── Marco de la app autenticada ─────────────
 export function appShell(app, user, { title, path, body, csrf, scripts = [], flash = null }) {
   const tx = t(user.locale);
-  const tabs = [['/app/today', '☀️', tx.nav.today], ['/app/habits', '🧩', tx.nav.habits], ['/app/insights', '📈', tx.nav.insights], ['/app/settings', '⚙️', tx.nav.settings]];
+  const tabs = [['/app/today', '☀️', tx.nav.today], ['/app/habits', '🧩', tx.nav.habits], ['/app/alimentacion', '🍽️', tx.nav.food], ['/app/insights', '📈', tx.nav.insights], ['/app/settings', '⚙️', tx.nav.settings]];
   return `${head(app, { title: `${title} · HabitoOS`, lang: user.locale, theme: user.theme })}<meta name="robots" content="noindex"><meta name="csrf" content="${esc(csrf)}"></head>
 <body><a class="skip" href="#main">${user.locale === 'en' ? 'Skip to content' : 'Saltar al contenido'}</a>
 <div class="app"><header class="topbar"><a class="brand" href="${P(app, '/app/today')}">${tx.brand}<small>${tx.by}</small></a></header>
@@ -114,7 +114,7 @@ ${body}
 const csrfField = (csrf) => `<input type="hidden" name="_csrf" value="${esc(csrf)}">`;
 
 // ───────────── Today ─────────────
-export function todayPage(app, user, data, csrf, { reflection = 'none', flash = null } = {}) {
+export function todayPage(app, user, data, csrf, { reflection = 'none', flash = null, food = null } = {}) {
   const tx = t(user.locale);
   const s = data.summary;
   const isToday = data.date === data.today;
@@ -149,6 +149,7 @@ export function todayPage(app, user, data, csrf, { reflection = 'none', flash = 
     <div><strong data-sum="coverage">${s.coverage == null ? '—' : s.coverage + '%'}</strong><span class="small muted">${tx.today.coverage}</span></div></div>
   <ul class="list" data-day="${data.date}">${data.items.map(card).join('')}</ul>`
     : `<div class="card"><p>${tx.today.empty}</p><a class="btn btn--primary" href="${P(app, '/app/habits/nuevo')}">${tx.today.addFirst}</a></div>`}
+  ${food ? `<a class="card food-cta" href="${P(app, `/app/alimentacion${data.date === data.today ? '' : '?d=' + data.date}`)}"><span aria-hidden="true">🍽️</span><span><strong>${tx.food.title}</strong><br><span class="small muted">${tx.food.ofPlan.replace('{a}', fmtNum(food.covered)).replace('{b}', fmtNum(food.planned))}${food.extra ? ' · ' + tx.food.extraN.replace('{n}', fmtNum(food.extra)) : ''}</span></span><span aria-hidden="true">›</span></a>` : ''}
   ${reflectionCard(app, tx, { ...data, csrf }, reflection)}
   <div class="toast" hidden data-toast role="status"><span data-toast-text></span><button type="button" data-toast-undo>${tx.today.undo}</button></div>
   <script type="application/json" id="i18n">${JSON.stringify({ saved: tx.today.saved, error: tx.errors.generic, states: { done: tx.today.done, partial: tx.today.partial, missed: tx.today.missed, skipped: tx.today.skipped, not_applicable: tx.today.not_applicable, pending: tx.today.pendingState, no_data: tx.today.no_data } }).replace(/</g, '\\u003c')}</script>`;
@@ -349,6 +350,87 @@ function obstaclesSection(tx, L, o) {
     ${o.habits.map((h) => `<section class="card" style="margin-top:14px"><h3 style="margin-top:0">${esc(h.emoji || '')} ${esc(h.name)}</h3>${bars(h.keys)}</section>`).join('')}
     ${o.obstacles_n < 5 ? `<p class="small muted">${tx.insights.fewData}</p>` : ''}
     <p class="small muted">${tx.reflection.noCausal}</p>` : `<p class="muted">${tx.reflection.insightsEmpty}</p>`}`;
+}
+
+// ───────────── Alimentación por equivalentes ─────────────
+// Cada emoji es una porción de un grupo (no un alimento ni calorías). Tocar marca; tocar la última marcada la quita.
+function portionButtons(g, planned, done, slot) {
+  const n = Math.ceil(planned);
+  return Array.from({ length: n }, (_, k) => {
+    const half = k === n - 1 && planned % 1 !== 0;
+    const filled = done >= (half ? k + 0.5 : k + 1);
+    return `<button type="button" class="pt${filled ? ' pt--on' : ''}${half ? ' pt--half' : ''}" data-add data-slot="${esc(slot)}" data-group="${g.id}" data-portions="${half ? 0.5 : 1}" aria-pressed="${filled}" aria-label="${esc(g.name)} ${k + 1}${half ? ' (½)' : ''}">${esc(g.emoji)}</button>`;
+  }).join('');
+}
+export function nutritionPage(app, user, { csrf, day, history, flash = null }) {
+  const tx = t(user.locale);
+  const f = tx.food;
+  const G = Object.fromEntries(day.groups.map((g) => [g.id, g]));
+  const isToday = day.date === day.today;
+  const s = day.summary;
+  const pct = s.planned ? Math.min(100, Math.round((s.covered / s.planned) * 100)) : 0;
+  const head = `<div class="today-head"><div><h1>${f.title}</h1><p class="muted" style="margin:0">${esc(formatLongDate(day.date, user.locale))}</p></div>
+    <nav class="daynav" aria-label="Días"><a href="?d=${addDays(day.date, -1)}" aria-label="${tx.today.prevDay}">‹</a>${!isToday ? `<a href="?" aria-label="${tx.today.backToday}">•</a><a href="?d=${addDays(day.date, 1)}" aria-label="${tx.today.nextDay}">›</a>` : ''}</nav></div>`;
+  if (!day.has_plan) {
+    return appShell(app, user, { title: f.title, path: '/app/alimentacion', csrf, flash, body: `${head}
+      <section class="card"><h2 style="margin-top:0">${f.introTitle}</h2><p>${f.intro}</p>
+      <p class="food-legend">${day.groups.map((g) => `<span>${esc(g.emoji)} ${esc(g.name)}</span>`).join('')}</p>
+      <a class="btn btn--primary" href="${P(app, '/app/alimentacion/plan')}">${f.create}</a></section>
+      <p class="small muted" style="margin-top:16px">${f.disclaimer}</p>` });
+  }
+  const meals = day.meals.map((m) => `<section class="card meal" style="margin-top:12px"><h2 class="meal-h">${esc(m.name)}${m.time ? ` <span class="muted small">${esc(m.time)}</span>` : ''}</h2>
+    ${m.items.length ? m.items.map((it) => { const g = G[it.group_id]; return `<div class="food-row" data-item data-slot="${esc(m.slot)}" data-group="${g.id}"><span class="food-name">${esc(g.name)} <span class="muted small" data-count>${fmtNum(it.done)}/${fmtNum(it.planned)}</span></span><div class="pts">${portionButtons(g, it.planned, it.done, m.slot)}</div></div>`; }).join('') : `<p class="small muted">${f.noTargets}</p>`}
+  </section>`).join('');
+  const groupsActive = day.groups.filter((g) => !g.archived);
+  const extra = `<section class="card" style="margin-top:12px"><h2 class="meal-h">${f.offPlan}</h2><p class="small muted" style="margin-top:0">${f.offPlanHelp}</p>
+    <div class="extra-grid">${groupsActive.map((g) => `<div class="extra" data-extra data-group="${g.id}"><button type="button" class="pt pt--on" data-add data-slot="" data-group="${g.id}" data-portions="1" aria-label="${esc(f.addExtra)} ${esc(g.name)}">${esc(g.emoji)}<b>+</b></button>
+      <strong data-extra-count>${fmtNum(day.extra[g.id] || 0)}</strong><button type="button" class="btn btn--ghost small" data-remove data-slot="" data-group="${g.id}" aria-label="${esc(f.removeExtra)} ${esc(g.name)}">−</button></div>`).join('')}</div></section>`;
+  const totals = `<section style="margin-top:16px"><h2>${f.totals}</h2><ul class="bars">${day.totals.map((x) => { const g = G[x.group_id]; return `<li><span>${esc(g.emoji)} ${esc(g.name)}</span><span class="bar" aria-hidden="true"><i style="width:${x.planned ? Math.min(100, Math.round((x.in_plan / x.planned) * 100)) : 0}%"></i></span><strong data-total="${g.id}">${fmtNum(x.in_plan)}/${fmtNum(x.planned)}${x.extra ? ` +${fmtNum(x.extra)}` : ''}</strong></li>`; }).join('')}</ul></section>`;
+  const hist = history.days.length ? `<section style="margin-top:16px"><h2>${f.last7}</h2><ul class="bars">${history.days.map((d) => `<li><span>${esc(formatLongDate(d.date, user.locale).split(',')[0])} ${d.date.slice(8)}</span><span class="bar" aria-hidden="true"><i style="width:${d.adherence ?? 0}%"></i></span><strong>${d.adherence == null ? '—' : Math.round(d.adherence) + '%'}</strong></li>`).join('')}</ul>
+    <p class="small muted">${f.histHelp}${history.n < 5 ? ' ' + tx.insights.fewData : ''}</p></section>` : '';
+  const body = `${head}
+  <div class="summary food-summary" aria-live="polite"><div><strong data-sum="covered">${fmtNum(s.covered)}/${fmtNum(s.planned)}</strong><span class="small muted">${f.portionsPlan}</span></div>
+    <div><strong data-sum="pct">${s.adherence == null ? '—' : Math.round(s.adherence) + '%'}</strong><span class="small muted">${f.planDone}</span></div>
+    <div><strong data-sum="extra">${fmtNum(s.extra)}</strong><span class="small muted">${f.extraShort}</span></div></div>
+  <div class="progress" aria-hidden="true"><span data-sum-bar style="width:${pct}%"></span></div>
+  <p class="small muted" style="margin:8px 0 0">${f.tapHelp}</p>
+  <div data-food data-date="${day.date}">${meals}${extra}</div>${totals}${hist}
+  <p class="row" style="margin-top:16px"><a class="btn" href="${P(app, '/app/alimentacion/plan')}">${f.edit}</a></p>
+  <p class="small muted">${f.disclaimer}</p>
+  <div class="toast" hidden data-toast role="status"><span data-toast-text></span></div>
+  <script type="application/json" id="food-i18n">${JSON.stringify({ saved: tx.today.saved, error: tx.errors.generic, removed: f.removed }).replace(/</g, '\\u003c')}</script>`;
+  return appShell(app, user, { title: f.title, path: '/app/alimentacion', body, csrf, flash, scripts: ['js/nutrition.js'] });
+}
+
+export function nutritionPlanPage(app, user, { csrf, plan, groups, allGroups, defaults, error = null, flash = null }) {
+  const tx = t(user.locale);
+  const f = tx.food;
+  const L = user.locale === 'en' ? 'en' : 'es';
+  const base = plan?.meals?.length ? plan.meals : defaults.map(([slot, name, time]) => ({ slot, name: name[L], time, targets: [] }));
+  const rows = [...base, ...Array.from({ length: Math.max(0, Math.min(8, base.length + 2) - base.length) }, (_, i) => ({ slot: '', name: '', time: '', targets: [], blank: true }))].slice(0, 8);
+  const mealCard = (m, i) => `<fieldset class="card meal-edit"><legend>${m.blank ? f.addMeal : esc(m.name)}</legend>
+    <input type="hidden" name="m${i}_slot" value="${esc(m.slot || '')}">
+    <div class="grid2"><label class="field"><span>${f.mealName}</span><input class="input" name="m${i}_name" maxlength="40" value="${esc(m.name || '')}" placeholder="${m.blank ? esc(f.mealPlaceholder) : ''}"></label>
+      <label class="field"><span>${f.mealTime}</span><input class="input" type="time" name="m${i}_time" value="${esc(m.time || '')}"></label></div>
+    <div class="portions-grid">${groups.map((g) => `<label class="portion"><span>${esc(g.emoji)} <span class="small">${esc(g.name)}</span></span><input class="input" type="number" inputmode="decimal" min="0" max="20" step="0.5" name="t${i}_${g.id}" value="${m.targets.find((x) => x.group_id === g.id)?.portions ?? ''}" placeholder="0"></label>`).join('')}</div>
+  </fieldset>`;
+  const body = `<h1>${f.planTitle}</h1>
+  <p class="muted">${f.planHelp}</p>
+  ${error ? `<p class="notice" role="alert">${esc(tx.errors[error] || tx.errors.generic)}</p>` : ''}
+  <form class="form" method="post" action="${P(app, '/app/alimentacion/plan')}">${csrfField(csrf)}
+    ${rows.map(mealCard).join('')}
+    <label class="field"><span>${f.notes} <span class="muted small">(${tx.common.optional})</span></span><textarea class="input" name="notes" maxlength="1000" placeholder="${esc(f.notesPlaceholder)}">${esc(plan?.notes || '')}</textarea><span class="small muted">🔒 ${tx.reflection.private}</span></label>
+    <label class="field"><span>${tx.habits.from}</span><input class="input" type="date" name="from" value=""><span class="small muted">${f.fromHelp}</span></label>
+    <button class="btn btn--primary btn--block">${f.savePlan}</button>
+  </form>
+  <h2 style="margin-top:28px">${f.groupsTitle}</h2><p class="small muted">${f.groupsHelp}</p>
+  <form class="form card" method="post" action="${P(app, '/app/alimentacion/grupos')}">${csrfField(csrf)}
+    ${allGroups.map((g) => `<div class="group-edit"><input class="input emoji-in" name="g_${g.id}_emoji" value="${esc(g.emoji)}" maxlength="16" aria-label="Emoji"><input class="input" name="g_${g.id}_name" value="${esc(g.name)}" maxlength="30" aria-label="${esc(f.groupName)}">
+      <label class="small"><input type="checkbox" name="g_${g.id}_archived" value="1"${g.archived ? ' checked' : ''}> ${f.hide}</label></div>`).join('')}
+    <div class="group-edit"><input class="input emoji-in" name="new_emoji" maxlength="16" placeholder="🥤" aria-label="Emoji"><input class="input" name="new_name" maxlength="30" placeholder="${esc(f.newGroup)}" aria-label="${esc(f.newGroup)}"><span></span></div>
+    <button class="btn">${f.saveGroups}</button></form>
+  <p class="small muted" style="margin-top:16px">${f.disclaimer}</p>`;
+  return appShell(app, user, { title: f.planTitle, path: '/app/alimentacion', body, csrf, flash });
 }
 
 // ───────────── Plan y suscripción ─────────────

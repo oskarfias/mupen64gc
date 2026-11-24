@@ -13,13 +13,14 @@ Plataforma de hábitos y mejora continua. Vive en **bikrom.com/habitoos**, dentr
 | Hábitos para desarrollar, mantener, reducir y abandonar; medición sí/no, cantidad, duración o rango | Panel administrativo SaaS (B12) |
 | Metas y programación **versionadas**: cambiar una meta no reescribe la historia | Notificaciones push en el teléfono |
 | Today: registro en 1–2 toques, autoguardado idempotente, deshacer, 7 estados ("sin registro" ≠ "no cumplido") | Experimentos y revisión semanal (B15) |
-| Pausas, días de descanso y "no aplica" sin penalización | Nutrición (B16), PWA sin conexión (B17) |
+| Pausas, días de descanso y "no aplica" sin penalización | PWA sin conexión (B17) |
 | Adherencia, cobertura y recuperación con denominador visible; límite Free de 3 hábitos y 30 días aplicado en el backend | |
 | Exportación JSON y CSV; eliminación de cuenta con auditoría seudonimizada | |
 | ES/EN, zona horaria IANA por usuario, modo claro y oscuro, PWA instalable (manifest y service worker de recursos estáticos) | |
 | Tendencias (B10): adherencia por semana o mes en gráficas SVG accesibles (con tabla), promedio del valor registrado, comparación con la línea base (primeros 14 días vs. últimos 14) con n y aviso de poca evidencia; se recalculan tras correcciones | |
 | Plan Pro (B11): Stripe Checkout en modo suscripción, precios por entorno, consentimiento explícito, activación solo por webhook firmado e idempotente, cancelación al final del periodo pagado, perder Pro no borra datos | |
 | Recordatorios por correo (B18): opt-in con correo verificado, a la hora de cada hábito pendiente y resumen diario opcional, según la zona horaria del usuario, sin duplicados, baja en un clic | |
+| Alimentación por equivalentes (B16): grupos con emoji configurables (🍳 🥛 🥬 🍎 🫘 🥑 🍞), plan por comidas y horarios versionado por fecha, un toque por porción (medias porciones), fuera del plan, deshacer, % del plan por día; sin conteo calórico (el emoji es una etiqueta de grupo) | |
 | Reflexión diaria opcional (B09): ánimo, obstáculos por hábito y fecha, nota e intención "si X, entonces Y" cifradas; solo se sugiere tras tropiezos o por la tarde; omitirla no penaliza; frecuencias de obstáculos y ánimo en Indicadores | |
 
 ## Ejecutar y probar

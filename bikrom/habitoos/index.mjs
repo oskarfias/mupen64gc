@@ -14,6 +14,7 @@ import * as R from './domain/reflection.mjs';
 import * as T from './domain/trends.mjs';
 import * as Bl from './domain/billing.mjs';
 import * as Rm from './domain/reminders.mjs';
+import * as N from './domain/nutrition.mjs';
 import * as V from './views/pages.mjs';
 
 const here = (import.meta.url ? dirname(fileURLToPath(import.meta.url)) : '.'); // en Cloudflare no hay rutas de archivo
@@ -171,7 +172,8 @@ async function route(app, req, res) {
     const d = isDate(url.searchParams.get('d')) && url.searchParams.get('d') <= td ? url.searchParams.get('d') : td;
     const day = H.daily(app, user, d);
     const hour = Number(localTime(app.now(), user.timezone).slice(0, 2));
-    return page(V.todayPage(app, user, day, csrf, { reflection: R.prompt(app, user, day, { localHour: hour }), flash }));
+    const food = N.planAt(app, user, d) ? N.day(app, user, d).summary : null;
+    return page(V.todayPage(app, user, day, csrf, { reflection: R.prompt(app, user, day, { localHour: hour }), flash, food }));
   }
   if (path === '/app/reflexion') {
     const td = H.today(app, user);
@@ -248,6 +250,30 @@ async function route(app, req, res) {
     const bucket = range >= 180 ? 'month' : 'week';
     const trends = T.trends(app, user, from, td, { bucket, minDate: pro ? null : addDays(td, -(H.FREE_HISTORY_DAYS - 1)) });
     return page(V.insightsPage(app, user, H.metrics(app, user, from, td), { csrf, range, pro, clamped, obstacles: R.obstacleStats(app, user, from, td), trends }));
+  }
+  // ───────── Alimentación por equivalentes ─────────
+  if (path === '/app/alimentacion' && method === 'GET') {
+    const td = H.today(app, user);
+    const d = isDate(url.searchParams.get('d')) && url.searchParams.get('d') <= td ? url.searchParams.get('d') : td;
+    return page(V.nutritionPage(app, user, { csrf, day: N.day(app, user, d), history: N.history(app, user, addDays(td, -6), td), flash }));
+  }
+  if (path === '/app/alimentacion/plan' && method === 'GET') return page(V.nutritionPlanPage(app, user, { csrf, plan: N.planAt(app, user, H.today(app, user)), groups: N.groups(app, user), allGroups: N.groups(app, user, { all: true }), defaults: N.DEFAULT_MEALS, flash }));
+  if (path === '/app/alimentacion/plan' && method === 'POST') {
+    const meals = [];
+    for (let i = 0; i < 8; i++) {
+      if (form[`m${i}_name`] == null) continue;
+      const targets = {};
+      for (const [k, v] of Object.entries(form)) { const mm = k.match(new RegExp(`^t${i}_(.+)$`)); if (mm && Number(v) > 0) targets[mm[1]] = Number(v); }
+      meals.push({ slot: form[`m${i}_slot`], name: form[`m${i}_name`], time: form[`m${i}_time`], targets });
+    }
+    try { N.savePlan(app, user, { meals, notes: form.notes, from: form.from }); return back('/app/alimentacion', tx.food.saved); }
+    catch (e) { if (!e.code) throw e; return html(res, V.nutritionPlanPage(app, user, { csrf, plan: N.planAt(app, user, H.today(app, user)), groups: N.groups(app, user), allGroups: N.groups(app, user, { all: true }), defaults: N.DEFAULT_MEALS, error: e.code }), { status: 400, noindex: true }); }
+  }
+  if (path === '/app/alimentacion/grupos' && method === 'POST') {
+    const list = N.groups(app, user, { all: true }).map((g) => ({ id: g.id, name: form[`g_${g.id}_name`], emoji: form[`g_${g.id}_emoji`], archived: form[`g_${g.id}_archived`] === '1' }));
+    if (form.new_name && form.new_emoji) list.push({ name: form.new_name, emoji: form.new_emoji });
+    N.saveGroups(app, user, list);
+    return back('/app/alimentacion/plan', tx.food.groupsSaved);
   }
   if (path === '/app/plan' && method === 'GET') return page(V.planPage(app, user, { csrf, status: Bl.billingStatus(app, user), checkout: url.searchParams.get('checkout'), flash }));
   if ((m = path.match(/^\/app\/plan\/(checkout|cancelar|reanudar)$/)) && method === 'POST') {
@@ -350,6 +376,18 @@ async function api(app, req, res, p, url, user, ip) {
   }
   if ((m = p.match(/^\/reviews\/(\d{4}-\d{2}-\d{2})\/dismiss$/)) && method === 'POST') return json(res, 200, R.dismissReview(app, user, m[1]));
   if (p === '/reminders' && method === 'PUT') { Rm.setPreferences(app, user, { enabled: body.enabled, digestTime: body.digest_time }); return json(res, 200, { ok: true }); }
+  if ((m = p.match(/^\/nutrition\/day\/(\d{4}-\d{2}-\d{2})$/)) && method === 'GET') return json(res, 200, N.day(app, user, m[1]));
+  if ((m = p.match(/^\/nutrition\/day\/(\d{4}-\d{2}-\d{2})\/(add|remove)$/)) && method === 'POST') return json(res, 200, m[2] === 'add' ? N.addPortion(app, user, m[1], body) : N.removePortion(app, user, m[1], body));
+  if (p === '/nutrition/plan' && method === 'GET') return json(res, 200, { plan: N.planAt(app, user, H.today(app, user)), groups: N.groups(app, user) });
+  if (p === '/nutrition/plan' && method === 'PUT') return json(res, 200, { plan: N.savePlan(app, user, body) });
+  if (p === '/nutrition/groups' && method === 'PUT') return json(res, 200, { groups: N.saveGroups(app, user, body.groups) });
+  if (p === '/nutrition/history' && method === 'GET') {
+    const td = H.today(app, user);
+    let from = isDate(url.searchParams.get('from')) ? url.searchParams.get('from') : addDays(td, -29);
+    const minFree = addDays(td, -(H.FREE_HISTORY_DAYS - 1));
+    if (!H.isPro(app, user.id) && from < minFree) from = minFree;
+    return json(res, 200, N.history(app, user, from, td));
+  }
   if (p === '/billing' && method === 'GET') return json(res, 200, Bl.billingStatus(app, user));
   if (p === '/billing/checkout' && method === 'POST') return json(res, 200, await Bl.startCheckout(app, user, body.plan, { consent: body.consent, lang: user.locale }));
   if (p === '/billing/cancel' && method === 'POST') return json(res, 200, await Bl.cancelAtPeriodEnd(app, user));
@@ -376,7 +414,7 @@ async function api(app, req, res, p, url, user, ip) {
   }
   if (p === '/export' && method === 'GET') {
     app.audit(user.id, 'data_exported', 'user', user.id, { format: 'json' });
-    return send(res, 200, JSON.stringify({ ...H.exportData(app, user.id), reviews: R.exportReviews(app, user.id) }, null, 2), { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="habitoos-datos.json"', 'Cache-Control': 'no-store' });
+    return send(res, 200, JSON.stringify({ ...H.exportData(app, user.id), reviews: R.exportReviews(app, user.id), nutrition: N.exportNutrition(app, user.id) }, null, 2), { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="habitoos-datos.json"', 'Cache-Control': 'no-store' });
   }
   if (p === '/export.csv' && method === 'GET') {
     app.audit(user.id, 'data_exported', 'user', user.id, { format: 'csv' });
